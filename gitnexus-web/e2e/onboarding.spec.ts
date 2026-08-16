@@ -304,4 +304,35 @@ test.describe('Flow 4: Repo dropdown in exploring view', () => {
     await expect(page.getByText('Local Folder')).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('inline-analyze-form.png') });
   });
+
+  test('keeps every source tab inside the inline selector on wide screens', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await enterExploringView(page);
+
+    await page.getByTestId('repo-switcher-trigger').click();
+    await page.getByText('Analyze a new repository').click();
+
+    const tablist = page.getByRole('tablist');
+    const localFolderTab = page.getByRole('tab', { name: 'Local Folder' });
+    await expect(tablist).toBeVisible({ timeout: 5_000 });
+    await expect(localFolderTab).toBeVisible();
+
+    // A desktop viewport has room for every source choice. Keep the selector a
+    // single card instead of creating a horizontal overflow area for its last tab.
+    expect(await tablist.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
+
+    const [tablistBox, localFolderBox] = await Promise.all([
+      tablist.boundingBox(),
+      localFolderTab.boundingBox(),
+    ]);
+    if (!tablistBox || !localFolderBox) {
+      throw new Error('The source selector or Local Folder tab is not laid out.');
+    }
+    expect(localFolderBox.x).toBeGreaterThanOrEqual(tablistBox.x);
+    expect(localFolderBox.x + localFolderBox.width).toBeLessThanOrEqual(
+      tablistBox.x + tablistBox.width,
+    );
+  });
 });

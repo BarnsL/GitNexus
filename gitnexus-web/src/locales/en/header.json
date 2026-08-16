@@ -5,6 +5,7 @@
   "reanalyzeRepo": "Re-analyze {{repoName}}",
   "deleteRepo": "Delete {{repoName}}",
   "reanalyzingRepo": "Re-analyzing {{repoName}}: {{message}}",
+  "openGitRemote": "Open Git remote for {{repoName}}",
   "analyzeNew": "Analyze a new repository...",
   "searchRepositories": "Search repositories...",
   "noRepositoriesFound": "No repositories found for \"{{query}}\"",

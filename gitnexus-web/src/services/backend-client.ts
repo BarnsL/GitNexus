@@ -23,6 +23,8 @@ export interface BackendRepo {
   repoPath?: string; // git HEAD returns "repoPath"; older versions return "path"
   indexedAt: string;
   lastCommit?: string;
+  /** Sanitized origin remote discovered while indexing a local Git repository. */
+  remoteUrl?: string;
   stats?: {
     files?: number;
     nodes?: number;

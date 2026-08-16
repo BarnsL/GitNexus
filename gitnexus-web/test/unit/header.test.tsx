@@ -55,6 +55,7 @@ vi.mock('react-i18next', () => ({
       if (key === 'header:reanalyzeRepo') return `Re-analyze ${options?.repoName ?? ''}`;
       if (key === 'header:reanalyzingRepo')
         return `Re-analyzing ${options?.repoName ?? ''}: ${options?.message ?? ''}`;
+      if (key === 'header:openGitRemote') return `Open Git remote for ${options?.repoName ?? ''}`;
       if (key === 'header:deleteRepo') return `Delete ${options?.repoName ?? ''}`;
       if (key === 'header:analyzeNew') return 'Analyze new';
       if (key === 'header:searchRepositories') return 'Search repositories...';
@@ -131,6 +132,46 @@ describe('Header', () => {
 
     expect(screen.getByText('api-server')).toBeInTheDocument();
     expect(screen.queryByText('gitnexus-web')).not.toBeInTheDocument();
+  });
+
+  it('shows a discovered Git remote beneath its local repository', () => {
+    render(
+      <Header
+        availableRepos={[
+          {
+            ...makeRepo(0),
+            path: 'D:/projects/local-reels',
+            remoteUrl: 'https://github.com/example/local-reels',
+          } as BackendRepo,
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /reels/i }));
+
+    expect(screen.getByText('https://github.com/example/local-reels')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Git remote for reels' })).toHaveAttribute(
+      'href',
+      'https://github.com/example/local-reels',
+    );
+  });
+
+  it('keeps an SSH-origin local repository usable without an external link', () => {
+    render(
+      <Header
+        availableRepos={[
+          {
+            ...makeRepo(0),
+            remoteUrl: 'git@github.com:example/local-reels',
+          } as BackendRepo,
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /reels/i }));
+
+    expect(screen.getByText('git@github.com:example/local-reels')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open Git remote for reels' })).toBeNull();
   });
 
   it('shows an empty state when no repositories match the local search', async () => {

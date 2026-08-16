@@ -5,6 +5,7 @@
   "reanalyzeRepo": "重新分析 {{repoName}}",
   "deleteRepo": "删除 {{repoName}}",
   "reanalyzingRepo": "正在重新分析 {{repoName}}：{{message}}",
+  "openGitRemote": "打开 {{repoName}} 的 Git 远程仓库",
   "analyzeNew": "分析新仓库...",
   "searchRepositories": "搜索仓库...",
   "noRepositoriesFound": "未找到“{{query}}”相关仓库",

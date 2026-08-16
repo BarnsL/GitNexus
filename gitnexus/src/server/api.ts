@@ -938,6 +938,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
           repoPath: r.path,
           indexedAt: r.indexedAt,
           lastCommit: r.lastCommit,
+          remoteUrl: r.remoteUrl,
           stats: r.stats,
         })),
       );

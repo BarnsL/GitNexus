@@ -4,6 +4,7 @@ import {
   HelpCircle,
   Sparkles,
   Github,
+  GitBranch,
   Star,
   FolderOpen,
   ChevronDown,
@@ -42,6 +43,18 @@ const NODE_TYPE_COLORS: Record<string, string> = {
   Import: '#475569',
   Type: '#a78bfa',
 };
+
+function getBrowsableRemoteUrl(remoteUrl: string | undefined): string | undefined {
+  if (!remoteUrl) return undefined;
+  try {
+    const url = new URL(remoteUrl);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password
+      ? url.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 interface HeaderProps {
   onFocusNode?: (nodeId: string) => void;
@@ -212,7 +225,7 @@ export const Header = ({
             </button>
 
             {isRepoDropdownOpen && (
-              <div className="absolute top-full left-0 z-50 mt-1.5 flex max-h-[calc(100vh-4.5rem)] w-80 animate-slide-up flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface shadow-xl">
+              <div className="absolute top-full left-0 z-50 mt-1.5 flex max-h-[calc(100vh-4.5rem)] w-[28rem] max-w-[calc(100vw-2rem)] animate-slide-up flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface shadow-xl">
                 {showAnalyzer ? (
                   <div className="scrollbar-thin overflow-y-auto p-4">
                     <RepoAnalyzer
@@ -247,7 +260,7 @@ export const Header = ({
                             />
                           </div>
                         </div>
-                        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto pb-1">
+                        <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto pb-1">
                           {filteredRepos.length === 0 ? (
                             <div className="px-4 py-3 text-sm text-text-muted">
                               {t('header:noRepositoriesFound', { query: repoSearchQuery })}
@@ -256,6 +269,7 @@ export const Header = ({
                             filteredRepos.map((repo) => {
                               const identity = repoIdentity(repo);
                               const isActive = identity === activeRepoIdentity;
+                              const browsableRemoteUrl = getBrowsableRemoteUrl(repo.remoteUrl);
 
                               return (
                                 <div
@@ -276,9 +290,20 @@ export const Header = ({
                                     }}
                                     className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
                                   >
-                                    <FolderOpen className="h-3.5 w-3.5 shrink-0 text-node-folder" />
-                                    <span className="flex-1 truncate font-mono text-sm text-text-primary">
-                                      {repo.name}
+                                    <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-node-folder" />
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate font-mono text-sm text-text-primary">
+                                        {repo.name}
+                                      </span>
+                                      {repo.remoteUrl && (
+                                        <span
+                                          className="mt-0.5 flex min-w-0 items-center gap-1 font-mono text-[10px] text-text-muted"
+                                          title={repo.remoteUrl}
+                                        >
+                                          <GitBranch className="h-3 w-3 shrink-0" />
+                                          <span className="truncate">{repo.remoteUrl}</span>
+                                        </span>
+                                      )}
                                     </span>
                                     {isActive && (
                                       <span className="shrink-0 font-mono text-[10px] text-accent">
@@ -286,6 +311,21 @@ export const Header = ({
                                       </span>
                                     )}
                                   </button>
+                                  {browsableRemoteUrl && (
+                                    <a
+                                      href={browsableRemoteUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(event) => event.stopPropagation()}
+                                      className="shrink-0 rounded p-1 text-text-muted/0 transition-all group-hover:text-text-muted hover:!text-accent"
+                                      title={t('header:openGitRemote', { repoName: repo.name })}
+                                      aria-label={t('header:openGitRemote', {
+                                        repoName: repo.name,
+                                      })}
+                                    >
+                                      <GitBranch className="h-3.5 w-3.5" />
+                                    </a>
+                                  )}
                                   {/* Re-analyze */}
                                   <button
                                     data-testid="repo-switcher-reanalyze"

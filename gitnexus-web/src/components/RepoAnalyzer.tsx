@@ -62,7 +62,7 @@ function ModeTabs({ mode, onChange }: { mode: InputMode; onChange: (m: InputMode
 
   return (
     <div
-      className="flex gap-1 rounded-lg bg-elevated p-1"
+      className="grid grid-cols-2 gap-1 rounded-lg bg-elevated p-1 sm:grid-cols-4"
       role="tablist"
       aria-label={t('repoAnalyzer.inputType')}
     >
@@ -70,53 +70,55 @@ function ModeTabs({ mode, onChange }: { mode: InputMode; onChange: (m: InputMode
         role="tab"
         aria-selected={mode === 'github'}
         onClick={() => onChange('github')}
-        className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+        className={`flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
           mode === 'github'
             ? 'bg-accent text-white shadow-sm'
             : 'text-text-muted hover:text-text-secondary'
         } `}
       >
         <Github className="h-3 w-3" />
-        {t('repoAnalyzer.githubUrl')}
+        <span className="min-w-0 text-center leading-tight">{t('repoAnalyzer.githubUrl')}</span>
       </button>
       <button
         role="tab"
         aria-selected={mode === 'gitlab'}
         onClick={() => onChange('gitlab')}
-        className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+        className={`flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
           mode === 'gitlab'
             ? 'bg-accent text-white shadow-sm'
             : 'text-text-muted hover:text-text-secondary'
         } `}
       >
         <Gitlab className="h-3 w-3" />
-        {t('repoAnalyzer.gitlabUrl')}
+        <span className="min-w-0 text-center leading-tight">{t('repoAnalyzer.gitlabUrl')}</span>
       </button>
       <button
         role="tab"
         aria-selected={mode === 'azure'}
         onClick={() => onChange('azure')}
-        className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+        className={`flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
           mode === 'azure'
             ? 'bg-accent text-white shadow-sm'
             : 'text-text-muted hover:text-text-secondary'
         } `}
       >
         <AzureDevops className="h-3 w-3" />
-        {t('repoAnalyzer.azureDevOpsUrl')}
+        <span className="min-w-0 text-center leading-tight">
+          {t('repoAnalyzer.azureDevOpsUrl')}
+        </span>
       </button>
       <button
         role="tab"
         aria-selected={mode === 'local'}
         onClick={() => onChange('local')}
-        className={`flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+        className={`flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
           mode === 'local'
             ? 'bg-accent text-white shadow-sm'
             : 'text-text-muted hover:text-text-secondary'
         } `}
       >
         <FolderOpen className="h-3 w-3" />
-        {t('repoAnalyzer.localFolder')}
+        <span className="min-w-0 text-center leading-tight">{t('repoAnalyzer.localFolder')}</span>
       </button>
     </div>
   );
