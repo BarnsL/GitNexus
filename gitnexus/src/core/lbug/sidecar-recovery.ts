@@ -378,6 +378,62 @@ export async function preflightLbugSidecars(
     return inspectLbugSidecars(dbPath);
   }
 
+  // A tiny WAL alongside a shadow means an aborted read-only stream left a
+  // header-only WAL (42 bytes, zero data pages) while LadybugDB had already
+  // flushed a shadow from a prior checkpoint. LadybugDB refuses read-only
+  // opens with "checkpoint is in progress" when both files exist. Since the
+  // WAL carries no data pages, quarantining it and removing the now-orphaned
+  // shadow is safe and restores openability.
+  if (
+    state.kind === 'wal-with-shadow' &&
+    state.walBytes <= TINY_ORPHAN_WAL_BYTES &&
+    options.mode === 'read-only'
+  ) {
+    await quarantineWalForMissingShadow(dbPath, {
+      logger: options.logger,
+      level: 'debug',
+      reason: `${options.mode} preflight tiny WAL with shadow (${state.walBytes}b WAL, ${state.shadowBytes}b shadow)`,
+    });
+    try {
+      await fs.unlink(`${dbPath}.shadow`);
+      logDebug(
+        options.logger,
+        `GitNexus: removed orphan shadow after quarantining tiny WAL at ${dbPath}`,
+      );
+    } catch (err) {
+      if (!isMissingFsError(err)) {
+        warnOnce(
+          options.logger,
+          `${dbPath}:shadow-remove-failed:${options.mode}`,
+          `GitNexus: failed to remove shadow after quarantining tiny WAL at ${dbPath}: ${(err as Error).message}`,
+        );
+      }
+    }
+    return inspectLbugSidecars(dbPath);
+  }
+
+  // An orphan shadow (no WAL) blocks read-only opens with "Couldn't replay
+  // shadow pages under read-only mode." The shadow is a checkpoint-tracking
+  // file; without a WAL there is nothing to replay, so it is safe to remove.
+  if (state.kind === 'orphan-shadow' && options.mode === 'read-only') {
+    try {
+      await fs.unlink(`${dbPath}.shadow`);
+      logDebug(
+        options.logger,
+        `GitNexus: removed orphan shadow (no WAL) at ${dbPath} before ${options.mode} open`,
+      );
+    } catch (err) {
+      if (!isMissingFsError(err)) {
+        warnOnce(
+          options.logger,
+          `${dbPath}:orphan-shadow-remove-failed:${options.mode}`,
+          `GitNexus: failed to remove orphan shadow at ${dbPath}: ${(err as Error).message}`,
+        );
+      }
+    }
+    return inspectLbugSidecars(dbPath);
+  }
+
   if (state.kind === 'orphan-wal') {
     warnOnce(
       options.logger,

@@ -795,17 +795,20 @@ const doInitLbug = async (dbPath: string, readOnly: boolean = false) => {
   }
 
   // ---------------------------------------------------------------------------
-  // Read-only fast path: skip all filesystem mutations (path cleanup, init
+  // Read-only fast path: skip most filesystem mutations (path cleanup, init
   // lock, orphan sidecar removal, mkdir) so the open succeeds on read-only
   // filesystems such as Docker `:ro` bind mounts. The init lock exists to
   // prevent a TOCTOU race during DB *creation* — read-only opens never
   // create databases and don't need the lock.
+  // Quarantine IS allowed: tiny orphan WALs (42-byte header-only leftovers
+  // from aborted read-only streams) block every subsequent open until removed.
+  // The quarantine rename is the only mutation and is safe on writable media.
   // ---------------------------------------------------------------------------
   if (readOnly) {
     await preflightLbugSidecars(dbPath, {
       mode: 'read-only',
       logger,
-      allowQuarantine: false,
+      allowQuarantine: true,
     });
 
     const opened = await openLbugConnection(lbug, dbPath, { readOnly: true });
