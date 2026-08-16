@@ -803,10 +803,14 @@ describe('Symmetric WAL-size gate during missing-shadow recovery (PR #1747 D2)',
   it('KTD7 guard: refuses to quarantine when the shadow is present on disk (data-loss guard)', async () => {
     vi.resetModules();
     const dbPath = '/tmp/gitnexus-lbug-win-shadow-present/lbug';
-    const { fsMock, warnMock } = setupShadowMissingRecovery(dbPath, 1024, {
-      errorMessage: windowsError2(dbPath),
-      shadowBytes: 64,
-    });
+    const { fsMock, warnMock } = setupShadowMissingRecovery(
+      dbPath,
+      TINY_ORPHAN_WAL_BYTES_TEST + 1,
+      {
+        errorMessage: windowsError2(dbPath),
+        shadowBytes: 64,
+      },
+    );
 
     const adapter = await import('../../src/core/lbug/lbug-adapter.js');
 
