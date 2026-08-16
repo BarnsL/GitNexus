@@ -83,11 +83,12 @@
     },
     "@vercel/node": {
       "path-to-regexp": "6.3.0",
-      "undici": "6.24.0"
+      "undici": "6.28.0"
     },
     "@vercel/python-analysis": {
       "minimatch": "10.2.3",
-      "smol-toml": "1.6.1"
+      "smol-toml": "1.6.1",
+      "js-yaml": "4.3.1"
     }
   }
 }
