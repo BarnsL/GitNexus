@@ -31,6 +31,7 @@ import type {
   MiniMaxConfig,
   GLMConfig,
   DeepSeekConfig,
+  CustomProviderConfig,
   AgentStreamChunk,
   AgentHistoryMessage,
   MiniMaxThinkingMode,
@@ -339,6 +340,43 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
         configuration: {
           apiKey: deepseekConfig.apiKey,
           baseURL: 'https://api.deepseek.com',
+        },
+        streaming: true,
+      });
+    }
+
+    case 'custom': {
+      const customConfig = config as CustomProviderConfig;
+      const apiKey = customConfig.apiKey?.trim();
+      const baseUrl = customConfig.baseUrl?.trim();
+
+      if (!apiKey) {
+        throw new Error('API key is required for custom provider');
+      }
+
+      if (!baseUrl) {
+        throw new Error('Custom provider base URL is required');
+      }
+
+      if (customConfig.apiCompatibility === 'anthropic') {
+        return new ChatAnthropic({
+          anthropicApiKey: apiKey,
+          model: customConfig.model,
+          temperature: customConfig.temperature ?? 0.1,
+          maxTokens: customConfig.maxTokens ?? 8192,
+          streaming: true,
+          clientOptions: { baseURL: baseUrl },
+        });
+      }
+
+      return new ChatOpenAI({
+        apiKey,
+        modelName: customConfig.model,
+        temperature: customConfig.temperature ?? 0.1,
+        maxTokens: customConfig.maxTokens,
+        configuration: {
+          apiKey,
+          baseURL: baseUrl,
         },
         streaming: true,
       });

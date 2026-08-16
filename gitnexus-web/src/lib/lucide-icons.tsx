@@ -86,6 +86,7 @@ export {
   PanelLeftClose,
   PanelRightClose,
   Pause,
+  Plus,
   Play,
   RefreshCw,
   Rocket,

@@ -21,6 +21,8 @@
   "apiKey": "API Key",
   "learnMore": "了解更多",
   "model": "模型",
+  "temperature": "温度",
+  "maxTokens": "最大 Token 数",
   "searchModelPlaceholder": "搜索或输入模型 ID...",
   "selectModelPlaceholder": "选择或输入模型...",
   "customModelHint": "输入模型 ID 或按 Enter",
@@ -93,6 +95,20 @@
     },
     "glm": {
       "apiKeyPlaceholder": "输入 Z.AI API Key"
+    },
+    "custom": {
+      "addProvider": "添加自定义",
+      "providerName": "提供商名称",
+      "providerNamePlaceholder": "例如：Together AI、Fireworks、vLLM",
+      "apiCompatibility": "API 兼容性",
+      "openaiCompat": "OpenAI 兼容",
+      "anthropicCompat": "Anthropic 兼容",
+      "apiKeyPlaceholder": "输入 API Key",
+      "baseUrlPlaceholder": "https://api.example.com/v1",
+      "baseUrlRequired": "此提供商的 API 端点 URL。",
+      "modelPlaceholder": "例如：meta-llama/Llama-3-70b",
+      "deleteProvider": "删除此自定义提供商",
+      "deleteConfirm": "删除 {{name}} ？此操作无法撤销。"
     }
   },
   "loadingModels": "正在加载模型...",

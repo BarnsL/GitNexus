@@ -3,6 +3,7 @@ import {
   loadSettings,
   saveSettings,
   setActiveProvider,
+  updateProviderSettings,
   getActiveProviderConfig,
   isProviderConfigured,
   clearSettings,
@@ -178,6 +179,114 @@ describe('getActiveProviderConfig', () => {
     saveSettings(settings);
 
     expect(getActiveProviderConfig()).toBeNull();
+  });
+
+  it('rejects a custom provider with a blank base URL before it can reach an SDK default', () => {
+    saveSettings({
+      ...loadSettings(),
+      activeProvider: 'custom',
+      activeCustomProviderId: 'freechain',
+      customProviders: [
+        {
+          id: 'freechain',
+          name: 'FreeChain',
+          apiCompatibility: 'openai',
+          apiKey: 'fc-test-key',
+          baseUrl: '   ',
+          model: 'auto',
+        },
+      ],
+    });
+
+    expect(getActiveProviderConfig()).toBeNull();
+  });
+});
+
+describe('custom provider settings', () => {
+  it('persists updates to the selected custom provider without storing the selector as provider data', () => {
+    saveSettings({
+      ...loadSettings(),
+      activeProvider: 'custom',
+      activeCustomProviderId: 'freechain',
+      customProviders: [
+        {
+          id: 'freechain',
+          name: 'FreeChain',
+          apiCompatibility: 'openai',
+          apiKey: 'fc-original-key',
+          baseUrl: 'http://127.0.0.1:4853/v1',
+          model: 'auto',
+        },
+      ],
+    });
+
+    const updated = updateProviderSettings('custom', {
+      customProviderId: 'freechain',
+      apiKey: 'fc-updated-key',
+      temperature: 0.45,
+      maxTokens: 1024,
+    });
+
+    expect(updated.customProviders?.[0]).toMatchObject({
+      apiKey: 'fc-updated-key',
+      temperature: 0.45,
+      maxTokens: 1024,
+    });
+    expect(updated.customProviders?.[0]).not.toHaveProperty('customProviderId');
+    expect(loadSettings().customProviders?.[0]).toMatchObject({
+      apiKey: 'fc-updated-key',
+      temperature: 0.45,
+      maxTokens: 1024,
+    });
+  });
+
+  it.each(['openai', 'anthropic'] as const)(
+    'throws before creating a %s-compatible chat client with a blank base URL',
+    (apiCompatibility) => {
+      expect(() =>
+        createChatModel({
+          provider: 'custom',
+          customProviderId: 'freechain',
+          apiCompatibility,
+          apiKey: 'fc-test-key',
+          baseUrl: '  ',
+          model: 'auto',
+        }),
+      ).toThrow('Custom provider base URL is required');
+    },
+  );
+
+  it('updates the active custom provider when no provider selector is supplied', () => {
+    saveSettings({
+      ...loadSettings(),
+      activeProvider: 'custom',
+      activeCustomProviderId: 'freechain',
+      customProviders: [
+        {
+          id: 'freechain',
+          name: 'FreeChain',
+          apiCompatibility: 'openai',
+          apiKey: 'fc-original-key',
+          baseUrl: 'http://127.0.0.1:4853/v1',
+          model: 'auto',
+        },
+        {
+          id: 'other',
+          name: 'Other Provider',
+          apiCompatibility: 'openai',
+          apiKey: 'other-original-key',
+          baseUrl: 'http://127.0.0.1:9000/v1',
+          model: 'other',
+        },
+      ],
+    });
+
+    const updated = updateProviderSettings('custom', { apiKey: 'fc-updated-key' });
+
+    expect(updated.customProviders).toMatchObject([
+      { id: 'freechain', apiKey: 'fc-updated-key' },
+      { id: 'other', apiKey: 'other-original-key' },
+    ]);
   });
 });
 

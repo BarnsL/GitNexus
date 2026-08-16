@@ -21,6 +21,8 @@
   "apiKey": "API Key",
   "learnMore": "Learn more",
   "model": "Model",
+  "temperature": "Temperature",
+  "maxTokens": "Max Tokens",
   "searchModelPlaceholder": "Search or type model ID...",
   "selectModelPlaceholder": "Select or type a model...",
   "customModelHint": "Type a model ID or press Enter",
@@ -93,6 +95,20 @@
     },
     "glm": {
       "apiKeyPlaceholder": "Enter your Z.AI API key"
+    },
+    "custom": {
+      "addProvider": "Add Custom",
+      "providerName": "Provider Name",
+      "providerNamePlaceholder": "e.g., Together AI, Fireworks, vLLM",
+      "apiCompatibility": "API Compatibility",
+      "openaiCompat": "OpenAI-compatible",
+      "anthropicCompat": "Anthropic-compatible",
+      "apiKeyPlaceholder": "Enter your API key",
+      "baseUrlPlaceholder": "https://api.example.com/v1",
+      "baseUrlRequired": "The base URL for this provider's API endpoint.",
+      "modelPlaceholder": "e.g., meta-llama/Llama-3-70b",
+      "deleteProvider": "Delete this custom provider",
+      "deleteConfirm": "Delete \"{{name}}\"? This cannot be undone."
     }
   },
   "loadingModels": "Loading models...",

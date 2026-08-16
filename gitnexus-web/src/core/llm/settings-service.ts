@@ -18,6 +18,8 @@ import {
   MiniMaxConfig,
   GLMConfig,
   DeepSeekConfig,
+  CustomProviderConfig,
+  CustomProviderEntry,
   ProviderConfig,
   MINIMAX_MODEL_IDS,
 } from './types';
@@ -25,6 +27,32 @@ import { DEFAULT_OPENROUTER_BASE_URL, DEFAULT_OLLAMA_BASE_URL } from '../../conf
 import { resilientFetch } from 'gitnexus-shared';
 
 const STORAGE_KEY = 'gitnexus-llm-settings';
+
+type CustomProviderSettingsUpdate = Partial<Omit<CustomProviderEntry, 'id'>> & {
+  customProviderId?: string;
+};
+
+type ProviderSettingsUpdate<T extends LLMProvider> = T extends 'openai'
+  ? Partial<Omit<OpenAIConfig, 'provider'>>
+  : T extends 'azure-openai'
+    ? Partial<Omit<AzureOpenAIConfig, 'provider'>>
+    : T extends 'gemini'
+      ? Partial<Omit<GeminiConfig, 'provider'>>
+      : T extends 'anthropic'
+        ? Partial<Omit<AnthropicConfig, 'provider'>>
+        : T extends 'ollama'
+          ? Partial<Omit<OllamaConfig, 'provider'>>
+          : T extends 'openrouter'
+            ? Partial<Omit<OpenRouterConfig, 'provider'>>
+            : T extends 'minimax'
+              ? Partial<Omit<MiniMaxConfig, 'provider'>>
+              : T extends 'glm'
+                ? Partial<Omit<GLMConfig, 'provider'>>
+                : T extends 'deepseek'
+                  ? Partial<Omit<DeepSeekConfig, 'provider'>>
+                  : T extends 'custom'
+                    ? CustomProviderSettingsUpdate
+                    : never;
 
 const mergeMiniMaxSettings = (
   stored?: LLMSettings['minimax'],
@@ -81,6 +109,8 @@ const mergeWithDefaults = (parsed?: Partial<LLMSettings> | null): LLMSettings =>
     ...DEFAULT_LLM_SETTINGS.deepseek,
     ...parsed?.deepseek,
   },
+  customProviders: parsed?.customProviders ?? [],
+  activeCustomProviderId: parsed?.activeCustomProviderId,
 });
 
 const readSettings = (storage: Storage): Partial<LLMSettings> | null => {
@@ -149,27 +179,7 @@ export const saveSettings = (settings: LLMSettings): void => {
  */
 export const updateProviderSettings = <T extends LLMProvider>(
   provider: T,
-  updates: Partial<
-    T extends 'openai'
-      ? Partial<Omit<OpenAIConfig, 'provider'>>
-      : T extends 'azure-openai'
-        ? Partial<Omit<AzureOpenAIConfig, 'provider'>>
-        : T extends 'gemini'
-          ? Partial<Omit<GeminiConfig, 'provider'>>
-          : T extends 'anthropic'
-            ? Partial<Omit<AnthropicConfig, 'provider'>>
-            : T extends 'ollama'
-              ? Partial<Omit<OllamaConfig, 'provider'>>
-              : T extends 'openrouter'
-                ? Partial<Omit<OpenRouterConfig, 'provider'>>
-                : T extends 'minimax'
-                  ? Partial<Omit<MiniMaxConfig, 'provider'>>
-                  : T extends 'glm'
-                    ? Partial<Omit<GLMConfig, 'provider'>>
-                    : T extends 'deepseek'
-                      ? Partial<Omit<DeepSeekConfig, 'provider'>>
-                      : never
-  >,
+  updates: ProviderSettingsUpdate<T>,
 ): LLMSettings => {
   const current = loadSettings();
 
@@ -274,8 +284,19 @@ export const updateProviderSettings = <T extends LLMProvider>(
       saveSettings(updated);
       return updated;
     }
+    case 'custom': {
+      const { customProviderId, ...entryUpdates } = updates as CustomProviderSettingsUpdate;
+      const targetId = customProviderId ?? current.activeCustomProviderId;
+      const updated: LLMSettings = {
+        ...current,
+        customProviders: (current.customProviders ?? []).map((entry) =>
+          entry.id === targetId ? { ...entry, ...entryUpdates } : entry,
+        ),
+      };
+      saveSettings(updated);
+      return updated;
+    }
     default: {
-      // Should be unreachable due to T extends LLMProvider, but keep a safe fallback
       const updated: LLMSettings = { ...current };
       saveSettings(updated);
       return updated;
@@ -355,6 +376,24 @@ const providerBuilders: Record<LLMProvider, ProviderBuilder> = {
     if (!settings.deepseek?.apiKey) return null;
     return { provider: 'deepseek', ...settings.deepseek } as DeepSeekConfig;
   },
+  custom: (settings) => {
+    const entry = settings.customProviders?.find((p) => p.id === settings.activeCustomProviderId);
+    const apiKey = typeof entry?.apiKey === 'string' ? entry.apiKey.trim() : '';
+    const baseUrl = typeof entry?.baseUrl === 'string' ? entry.baseUrl.trim() : '';
+    // Custom endpoints never inherit an SDK default. A missing URL must make the
+    // provider unavailable before any request can be constructed.
+    if (!entry || !apiKey || !baseUrl) return null;
+    return {
+      provider: 'custom',
+      customProviderId: entry.id,
+      apiKey,
+      baseUrl,
+      model: entry.model,
+      apiCompatibility: entry.apiCompatibility,
+      temperature: entry.temperature,
+      maxTokens: entry.maxTokens,
+    } as CustomProviderConfig;
+  },
 };
 
 export const getActiveProviderConfig = (): ProviderConfig | null => {
@@ -427,6 +466,8 @@ export const getProviderDisplayName = (provider: LLMProvider): string => {
       return 'GLM (Z.AI)';
     case 'deepseek':
       return 'DeepSeek';
+    case 'custom':
+      return 'Custom';
     default:
       return provider;
   }
@@ -459,10 +500,25 @@ export const getAvailableModels = (provider: LLMProvider): string[] => {
       return ['GLM-5', 'GLM-5-Turbo', 'GLM-4.7', 'GLM-4.5'];
     case 'deepseek':
       return ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'];
+    case 'custom':
+      return [];
     default:
       return [];
   }
 };
+
+const generateCustomProviderId = (): string =>
+  `cp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
+export const createCustomProviderEntry = (name: string): CustomProviderEntry => ({
+  id: generateCustomProviderId(),
+  name,
+  apiCompatibility: 'openai',
+  baseUrl: '',
+  apiKey: '',
+  model: '',
+  temperature: 0.1,
+});
 
 /**
  * Fetch available models from OpenRouter API

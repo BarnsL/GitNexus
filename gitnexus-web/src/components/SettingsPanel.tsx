@@ -12,6 +12,8 @@ import {
   ChevronDown,
   Loader2,
   Search,
+  Plus,
+  Trash2,
 } from '@/lib/lucide-icons';
 import {
   loadSettings,
@@ -19,9 +21,17 @@ import {
   getProviderDisplayName,
   getAvailableModels,
   fetchOpenRouterModels,
+  createCustomProviderEntry,
 } from '../core/llm/settings-service';
 import { getAuthToken, setAuthToken } from '../services/backend-client';
-import type { LLMSettings, LLMProvider, MiniMaxThinkingMode } from '../core/llm/types';
+import {
+  DEFAULT_LLM_SETTINGS,
+  type LLMSettings,
+  type LLMProvider,
+  type MiniMaxThinkingMode,
+  type CustomProviderApiCompat,
+  type CustomProviderEntry,
+} from '../core/llm/types';
 import {
   getMiniMaxModelCapabilities,
   MINIMAX_ANTHROPIC_BASE_URLS,
@@ -361,7 +371,7 @@ export const SettingsPanel = ({
       ? MINIMAX_DOCS_ROOTS.cn_zh
       : MINIMAX_DOCS_ROOTS.global_en;
 
-  const providers: LLMProvider[] = [
+  const builtInProviders: LLMProvider[] = [
     'openai',
     'gemini',
     'anthropic',
@@ -372,6 +382,53 @@ export const SettingsPanel = ({
     'glm',
     'deepseek',
   ];
+
+  const customProviders = settings.customProviders ?? [];
+
+  const handleAddCustomProvider = () => {
+    const entry = createCustomProviderEntry(t('settings:providers.custom.addProvider'));
+    setSettings((prev) => ({
+      ...prev,
+      customProviders: [...(prev.customProviders ?? []), entry],
+      activeProvider: 'custom' as LLMProvider,
+      activeCustomProviderId: entry.id,
+    }));
+  };
+
+  const handleDeleteCustomProvider = (id: string) => {
+    setSettings((prev) => {
+      const remaining = (prev.customProviders ?? []).filter((p) => p.id !== id);
+      const wasActive = prev.activeProvider === 'custom' && prev.activeCustomProviderId === id;
+      return {
+        ...prev,
+        customProviders: remaining,
+        activeProvider: wasActive ? DEFAULT_LLM_SETTINGS.activeProvider : prev.activeProvider,
+        activeCustomProviderId: wasActive ? undefined : prev.activeCustomProviderId,
+      };
+    });
+  };
+
+  const handleSelectCustomProvider = (id: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      activeProvider: 'custom' as LLMProvider,
+      activeCustomProviderId: id,
+    }));
+  };
+
+  const updateCustomProvider = (id: string, updates: Partial<Omit<CustomProviderEntry, 'id'>>) => {
+    setSettings((prev) => ({
+      ...prev,
+      customProviders: (prev.customProviders ?? []).map((p) =>
+        p.id === id ? { ...p, ...updates } : p,
+      ),
+    }));
+  };
+
+  const activeCustomProvider =
+    settings.activeProvider === 'custom'
+      ? customProviders.find((p) => p.id === settings.activeCustomProviderId)
+      : undefined;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -455,7 +512,7 @@ export const SettingsPanel = ({
               {t('settings:provider')}
             </label>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {providers.map((provider) => (
+              {builtInProviders.map((provider) => (
                 <button
                   key={provider}
                   onClick={() => handleProviderChange(provider)}
@@ -489,6 +546,39 @@ export const SettingsPanel = ({
                   <span className="font-medium">{getProviderDisplayName(provider)}</span>
                 </button>
               ))}
+              {customProviders.map((cp) => (
+                <button
+                  key={cp.id}
+                  onClick={() => handleSelectCustomProvider(cp.id)}
+                  className={`flex items-center gap-3 rounded-xl border-2 p-4 transition-all ${
+                    settings.activeProvider === 'custom' &&
+                    settings.activeCustomProviderId === cp.id
+                      ? 'border-accent bg-accent/10 text-text-primary'
+                      : 'border-border-subtle bg-elevated text-text-secondary hover:border-accent/50'
+                  } `}
+                >
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg text-lg ${
+                      settings.activeProvider === 'custom' &&
+                      settings.activeCustomProviderId === cp.id
+                        ? 'bg-accent/20'
+                        : 'bg-surface'
+                    } `}
+                  >
+                    🔧
+                  </div>
+                  <span className="truncate font-medium">{cp.name || 'Custom'}</span>
+                </button>
+              ))}
+              <button
+                onClick={handleAddCustomProvider}
+                className="flex items-center gap-3 rounded-xl border-2 border-dashed border-border-subtle p-4 text-text-muted transition-all hover:border-accent/50 hover:text-text-secondary"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface">
+                  <Plus className="h-5 w-5" />
+                </div>
+                <span className="font-medium">{t('settings:providers.custom.addProvider')}</span>
+              </button>
             </div>
           </div>
 
@@ -1092,6 +1182,184 @@ export const SettingsPanel = ({
                   className="w-full rounded-xl border border-border-subtle bg-elevated px-4 py-3 font-mono text-sm text-text-primary transition-all outline-none placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
                 />
                 <p className="text-xs text-text-muted">{t('settings:glmCodingApi')}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Custom Provider Settings */}
+          {settings.activeProvider === 'custom' && activeCustomProvider && (
+            <div className="animate-fade-in space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  {activeCustomProvider.name || t('settings:providers.custom.addProvider')}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      confirm(
+                        t('settings:providers.custom.deleteConfirm', {
+                          name: activeCustomProvider.name,
+                        }),
+                      )
+                    ) {
+                      handleDeleteCustomProvider(activeCustomProvider.id);
+                    }
+                  }}
+                  className="rounded-lg p-2 text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                  title={t('settings:providers.custom.deleteProvider')}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-secondary">
+                  {t('settings:providers.custom.providerName')}
+                </label>
+                <input
+                  type="text"
+                  value={activeCustomProvider.name}
+                  onChange={(e) =>
+                    updateCustomProvider(activeCustomProvider.id, { name: e.target.value })
+                  }
+                  placeholder={t('settings:providers.custom.providerNamePlaceholder')}
+                  className="w-full rounded-xl border border-border-subtle bg-elevated px-4 py-3 text-text-primary transition-all outline-none placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-secondary">
+                  {t('settings:providers.custom.apiCompatibility')}
+                </label>
+                <select
+                  value={activeCustomProvider.apiCompatibility}
+                  onChange={(e) =>
+                    updateCustomProvider(activeCustomProvider.id, {
+                      apiCompatibility: e.target.value as CustomProviderApiCompat,
+                    })
+                  }
+                  className="w-full rounded-xl border border-border-subtle bg-elevated px-4 py-3 text-sm text-text-primary transition-all outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                >
+                  <option value="openai">{t('settings:providers.custom.openaiCompat')}</option>
+                  <option value="anthropic">
+                    {t('settings:providers.custom.anthropicCompat')}
+                  </option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary">
+                  <Server className="h-4 w-4" />
+                  {t('settings:baseUrl')}
+                </label>
+                <input
+                  type="url"
+                  value={activeCustomProvider.baseUrl}
+                  onChange={(e) =>
+                    updateCustomProvider(activeCustomProvider.id, { baseUrl: e.target.value })
+                  }
+                  placeholder={t('settings:providers.custom.baseUrlPlaceholder')}
+                  className="w-full rounded-xl border border-border-subtle bg-elevated px-4 py-3 font-mono text-sm text-text-primary transition-all outline-none placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+                <p className="text-xs text-text-muted">
+                  {t('settings:providers.custom.baseUrlRequired')}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-text-secondary">
+                  <Key className="h-4 w-4" />
+                  {t('settings:apiKey')}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showApiKey[activeCustomProvider.id] ? 'text' : 'password'}
+                    value={activeCustomProvider.apiKey}
+                    onChange={(e) =>
+                      updateCustomProvider(activeCustomProvider.id, { apiKey: e.target.value })
+                    }
+                    placeholder={t('settings:providers.custom.apiKeyPlaceholder')}
+                    className="w-full rounded-xl border border-border-subtle bg-elevated px-4 py-3 pr-12 text-text-primary transition-all outline-none placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleApiKeyVisibility(activeCustomProvider.id)}
+                    className="absolute top-1/2 right-3 -translate-y-1/2 p-1 text-text-muted transition-colors hover:text-text-primary"
+                  >
+                    {showApiKey[activeCustomProvider.id] ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-secondary">
+                  {t('settings:model')}
+                </label>
+                <input
+                  type="text"
+                  value={activeCustomProvider.model}
+                  onChange={(e) =>
+                    updateCustomProvider(activeCustomProvider.id, { model: e.target.value })
+                  }
+                  placeholder={t('settings:providers.custom.modelPlaceholder')}
+                  className="w-full rounded-xl border border-border-subtle bg-elevated px-4 py-3 font-mono text-sm text-text-primary transition-all outline-none placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="custom-provider-temperature"
+                    className="text-sm font-medium text-text-secondary"
+                  >
+                    {t('settings:temperature')}
+                  </label>
+                  <input
+                    id="custom-provider-temperature"
+                    aria-label={t('settings:temperature')}
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={activeCustomProvider.temperature ?? ''}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      updateCustomProvider(activeCustomProvider.id, {
+                        temperature: value === '' ? undefined : Number(value),
+                      });
+                    }}
+                    className="w-full rounded-xl border border-border-subtle bg-elevated px-4 py-3 font-mono text-sm text-text-primary transition-all outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="custom-provider-max-tokens"
+                    className="text-sm font-medium text-text-secondary"
+                  >
+                    {t('settings:maxTokens')}
+                  </label>
+                  <input
+                    id="custom-provider-max-tokens"
+                    aria-label={t('settings:maxTokens')}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={activeCustomProvider.maxTokens ?? ''}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      updateCustomProvider(activeCustomProvider.id, {
+                        maxTokens: value === '' ? undefined : Number(value),
+                      });
+                    }}
+                    className="w-full rounded-xl border border-border-subtle bg-elevated px-4 py-3 font-mono text-sm text-text-primary transition-all outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  />
+                </div>
               </div>
             </div>
           )}

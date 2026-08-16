@@ -18,7 +18,21 @@ export type LLMProvider =
   | 'openrouter'
   | 'minimax'
   | 'glm'
-  | 'deepseek';
+  | 'deepseek'
+  | 'custom';
+
+export type CustomProviderApiCompat = 'openai' | 'anthropic';
+
+export interface CustomProviderEntry {
+  id: string;
+  name: string;
+  apiCompatibility: CustomProviderApiCompat;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+}
 
 export const MINIMAX_ANTHROPIC_BASE_URLS = {
   global_en: 'https://api.minimax.io/anthropic',
@@ -184,6 +198,17 @@ export interface DeepSeekConfig extends BaseProviderConfig {
 }
 
 /**
+ * Custom provider configuration — user-defined OpenAI or Anthropic compatible endpoint
+ */
+export interface CustomProviderConfig extends BaseProviderConfig {
+  provider: 'custom';
+  customProviderId: string;
+  apiKey: string;
+  baseUrl: string;
+  apiCompatibility: CustomProviderApiCompat;
+}
+
+/**
  * Union type for all provider configurations
  */
 export type ProviderConfig =
@@ -195,7 +220,8 @@ export type ProviderConfig =
   | OpenRouterConfig
   | MiniMaxConfig
   | GLMConfig
-  | DeepSeekConfig;
+  | DeepSeekConfig
+  | CustomProviderConfig;
 
 /**
  * Stored settings (what goes to localStorage)
@@ -215,6 +241,9 @@ export interface LLMSettings {
   minimax?: Partial<Omit<MiniMaxConfig, 'provider'>>;
   glm?: Partial<Omit<GLMConfig, 'provider'>>;
   deepseek?: Partial<Omit<DeepSeekConfig, 'provider'>>;
+
+  customProviders?: CustomProviderEntry[];
+  activeCustomProviderId?: string;
 
   // Intelligent Clustering Settings
   intelligentClustering: boolean;

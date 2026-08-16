@@ -18,6 +18,7 @@ export {
   clearSettings,
   getProviderDisplayName,
   getAvailableModels,
+  createCustomProviderEntry,
 } from './settings-service';
 
 // Tools
