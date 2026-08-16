@@ -50,20 +50,16 @@ export const StatusBar = () => {
         )}
       </div>
 
-      {/* Center - Sponsor */}
+      {/* Center - Sponsor (icon-only; no nag text, #2178) */}
       <a
         href="https://github.com/sponsors/abhigyanpatwari"
         target="_blank"
         rel="noopener noreferrer"
-        className="group flex cursor-pointer items-center gap-2 rounded-full border border-pink-500/20 bg-pink-500/10 px-3 py-1 transition-all duration-200 hover:scale-[1.02] hover:border-pink-500/40 hover:bg-pink-500/20"
+        title={t('graph:statusBar.sponsor')}
+        aria-label={t('graph:statusBar.sponsor')}
+        className="group flex cursor-pointer items-center rounded-full border border-pink-500/20 bg-pink-500/10 p-1.5 transition-all duration-200 hover:scale-[1.02] hover:border-pink-500/40 hover:bg-pink-500/20"
       >
         <Heart className="h-3.5 w-3.5 animate-pulse fill-pink-500/40 text-pink-500 transition-all duration-200 group-hover:scale-110 group-hover:fill-pink-500" />
-        <span className="text-[11px] font-medium text-pink-400 transition-colors group-hover:text-pink-300">
-          {t('graph:statusBar.sponsor')}
-        </span>
-        <span className="hidden text-[10px] text-pink-300/50 italic transition-colors group-hover:text-pink-300/80 md:inline">
-          {t('graph:statusBar.sponsorHint')}
-        </span>
       </a>
 
       {/* Right - Stats */}

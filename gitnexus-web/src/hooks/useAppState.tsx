@@ -209,6 +209,7 @@ interface AppState {
   isAgentReady: boolean;
   isAgentInitializing: boolean;
   agentError: string | null;
+  dismissAgentError: () => void;
 
   // Chat state
   chatMessages: ChatMessage[];
@@ -717,6 +718,11 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
         timestamp: Date.now(),
       };
       setChatMessages((prev) => [...prev, userMessage]);
+
+      // A prior failure (e.g. a streaming 502) must not linger forever once the
+      // user tries again — clear it so a successful retry doesn't leave a stale
+      // error banner stuck on screen.
+      setAgentError(null);
 
       // If embeddings are running and we're currently creating the vector index,
       // avoid a confusing "Embeddings not ready" error and give a clear wait message.
@@ -1571,6 +1577,7 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
     isAgentReady,
     isAgentInitializing,
     agentError,
+    dismissAgentError: () => setAgentError(null),
     // Chat state
     chatMessages,
     isChatLoading,

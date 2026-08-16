@@ -242,12 +242,22 @@ const AppContent = () => {
     if (viewMode !== 'exploring') return;
 
     const cleanup = connectHeartbeat(
-      () => setServerDisconnected(false),
+      () => {
+        setServerDisconnected(false);
+        // The registry on the server may have changed while we were
+        // disconnected (repos removed/added, cleanup run, etc.) — refetch so
+        // the header dropdown doesn't keep showing a stale snapshot from
+        // before the outage indefinitely (only re-fetched previously on a
+        // fresh connect or a new analyze).
+        fetchRepos()
+          .then((repos) => setAvailableRepos(repos))
+          .catch((e) => console.warn('Failed to refresh repo list after reconnect:', e));
+      },
       () => setServerDisconnected(true),
     );
 
     return cleanup;
-  }, [viewMode]);
+  }, [viewMode, setAvailableRepos]);
 
   // Render based on view mode
   if (viewMode === 'onboarding') {

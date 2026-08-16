@@ -24,6 +24,7 @@
     "clearChat": "清空聊天",
     "stopResponse": "停止响应"
   },
+  "dismissError": "关闭",
   "stopped": "用户已停止",
   "badges": {
     "configureAI": "配置 AI",
