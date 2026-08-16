@@ -114,7 +114,13 @@
   "loadingModels": "正在加载模型...",
   "noModelsMatch": "没有匹配“{{searchTerm}}”的模型",
   "moreModels": "+{{count}} 个更多模型 • 缩小搜索范围",
-  "apiKeySession": "API Key 保存在会话存储中，关闭此标签页后会被清除。",
+  "apiKeyPersistence": {
+    "label": "在此设备上记住 API 密钥",
+    "hint": "关闭此标签页后，仍会保留提供商设置，包括自定义端点。",
+    "remembered": "提供商设置已保存在此设备的浏览器配置文件中。",
+    "sessionOnly": "此标签页关闭后，提供商设置将被清除。",
+    "warning": "可以访问此浏览器配置文件的人可能能够读取已保存的密钥。请勿在共享计算机上启用此项。"
+  },
   "startLocalServer": "启动本地服务器",
   "settingsSaved": "设置已保存",
   "failedToSave": "保存失败",
@@ -128,5 +134,5 @@
   "openRouterModels": "OpenRouter Models",
   "zaiPlatform": "Z.AI Platform",
   "glmCodingApi": "Coding API（默认）。通用 API 请使用 https://api.z.ai/api/paas/v4。",
-  "privacyFull": "你的 API Key 只保存在此浏览器的会话存储中，关闭标签页后会清除。聊天时会直接发送给 LLM 提供商，你的代码不会离开本机。"
+  "privacyFull": "你的 API Key 保存在此浏览器中，聊天时会直接发送给 LLM 提供商。启用记住功能后，它们会保留在此设备的浏览器配置文件中。你的代码不会离开本机。"
 }

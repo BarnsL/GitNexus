@@ -37,5 +37,6 @@ localStorage.removeItem(I18N_LANGUAGE_STORAGE_KEY);
 beforeEach(() => {
   sessionStorage.removeItem('gitnexus-llm-settings');
   localStorage.removeItem('gitnexus-llm-settings'); // legacy key (migration)
+  localStorage.removeItem('gitnexus-llm-settings-persistence');
   localStorage.removeItem(I18N_LANGUAGE_STORAGE_KEY);
 });

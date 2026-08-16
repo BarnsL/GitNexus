@@ -18,6 +18,8 @@ import {
 import {
   loadSettings,
   saveSettings,
+  isLlmSettingsPersistenceEnabled,
+  setLlmSettingsPersistence,
   getProviderDisplayName,
   getAvailableModels,
   fetchOpenRouterModels,
@@ -270,6 +272,7 @@ export const SettingsPanel = ({
 }: SettingsPanelProps) => {
   const { t } = useTranslation(['common', 'settings']);
   const [settings, setSettings] = useState<LLMSettings>(loadSettings);
+  const [rememberApiKeys, setRememberApiKeys] = useState(isLlmSettingsPersistenceEnabled);
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
   /** Deploy access token. Stored outside LLM settings, persisted on Save. */
   const [authToken, setAuthTokenState] = useState(getAuthToken);
@@ -295,6 +298,7 @@ export const SettingsPanel = ({
   useEffect(() => {
     if (isOpen) {
       setSettings(loadSettings());
+      setRememberApiKeys(isLlmSettingsPersistenceEnabled());
       setAuthTokenState(getAuthToken());
       setSaveStatus('idle');
       setOllamaError(null);
@@ -335,6 +339,7 @@ export const SettingsPanel = ({
 
   const handleSave = () => {
     try {
+      setLlmSettingsPersistence(rememberApiKeys);
       saveSettings(settings);
       // The token persists on Save with everything else, not per keystroke: it
       // is the only affordance this panel gives for "committed", and a
@@ -582,8 +587,34 @@ export const SettingsPanel = ({
             </div>
           </div>
 
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-            {t('settings:apiKeySession')}
+          <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                aria-label={t('settings:apiKeyPersistence.label')}
+                checked={rememberApiKeys}
+                onChange={(event) => setRememberApiKeys(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-accent"
+              />
+              <span className="space-y-1">
+                <span className="block text-sm font-medium text-amber-100">
+                  {t('settings:apiKeyPersistence.label')}
+                </span>
+                <span className="block text-xs text-amber-200">
+                  {t('settings:apiKeyPersistence.hint')}
+                </span>
+              </span>
+            </label>
+            <p className="text-xs text-amber-200">
+              {t(
+                rememberApiKeys
+                  ? 'settings:apiKeyPersistence.remembered'
+                  : 'settings:apiKeyPersistence.sessionOnly',
+              )}
+            </p>
+            {rememberApiKeys && (
+              <p className="text-xs text-amber-100/90">{t('settings:apiKeyPersistence.warning')}</p>
+            )}
           </div>
 
           {/* OpenAI Settings */}

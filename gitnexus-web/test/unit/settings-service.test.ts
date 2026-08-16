@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   loadSettings,
   saveSettings,
@@ -17,6 +17,29 @@ import {
   MINIMAX_MODEL_IDS,
 } from '../../src/core/llm/types';
 import { createChatModel } from '../../src/core/llm/agent';
+
+const SETTINGS_STORAGE_KEY = 'gitnexus-llm-settings';
+const PERSISTENCE_STORAGE_KEY = 'gitnexus-llm-settings-persistence';
+
+const freeChainSettings = () => ({
+  ...loadSettings(),
+  activeProvider: 'custom' as const,
+  activeCustomProviderId: 'freechain',
+  customProviders: [
+    {
+      id: 'freechain',
+      name: 'FreeChain',
+      apiCompatibility: 'openai' as const,
+      apiKey: 'fc-test-key',
+      baseUrl: 'http://127.0.0.1:4853/v1',
+      model: 'auto',
+    },
+  ],
+});
+
+beforeEach(() => {
+  localStorage.removeItem(PERSISTENCE_STORAGE_KEY);
+});
 
 describe('loadSettings', () => {
   it('returns defaults when nothing is stored', () => {
@@ -77,7 +100,7 @@ describe('loadSettings', () => {
     expect(settings.activeProvider).toBeDefined();
   });
 
-  it('migrates legacy localStorage to sessionStorage', () => {
+  it('loads durable localStorage settings and mirrors them into the session', () => {
     localStorage.setItem(
       'gitnexus-llm-settings',
       JSON.stringify({
@@ -89,7 +112,41 @@ describe('loadSettings', () => {
     const settings = loadSettings();
     expect(settings.ollama.model).toBe('migrated-model');
     expect(sessionStorage.getItem('gitnexus-llm-settings')).not.toBeNull();
-    expect(localStorage.getItem('gitnexus-llm-settings')).toBeNull();
+    expect(localStorage.getItem('gitnexus-llm-settings')).not.toBeNull();
+  });
+
+  it('restores a custom provider from durable storage after a new browser session', () => {
+    saveSettings(freeChainSettings());
+    sessionStorage.clear();
+
+    expect(loadSettings()).toMatchObject({
+      activeProvider: 'custom',
+      activeCustomProviderId: 'freechain',
+      customProviders: [
+        {
+          id: 'freechain',
+          apiKey: 'fc-test-key',
+          baseUrl: 'http://127.0.0.1:4853/v1',
+          model: 'auto',
+        },
+      ],
+    });
+    expect(sessionStorage.getItem(SETTINGS_STORAGE_KEY)).not.toBeNull();
+  });
+
+  it('does not restore a durable provider after an opt-out', () => {
+    localStorage.setItem(PERSISTENCE_STORAGE_KEY, 'false');
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(freeChainSettings()));
+
+    expect(loadSettings().customProviders ?? []).toEqual([]);
+    expect(localStorage.getItem(SETTINGS_STORAGE_KEY)).toBeNull();
+  });
+
+  it('promotes a session-only provider record while remembering is enabled', () => {
+    sessionStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(freeChainSettings()));
+
+    expect(loadSettings()).toMatchObject({ activeProvider: 'custom' });
+    expect(localStorage.getItem(SETTINGS_STORAGE_KEY)).not.toBeNull();
   });
 });
 
@@ -103,10 +160,12 @@ describe('saveSettings / clearSettings', () => {
 
   it('clearSettings removes settings from both storages', () => {
     saveSettings({ ...loadSettings(), activeProvider: 'anthropic' });
+    localStorage.setItem(PERSISTENCE_STORAGE_KEY, 'false');
     expect(sessionStorage.getItem('gitnexus-llm-settings')).not.toBeNull();
     clearSettings();
     expect(sessionStorage.getItem('gitnexus-llm-settings')).toBeNull();
     expect(localStorage.getItem('gitnexus-llm-settings')).toBeNull();
+    expect(localStorage.getItem(PERSISTENCE_STORAGE_KEY)).toBe('false');
   });
 });
 

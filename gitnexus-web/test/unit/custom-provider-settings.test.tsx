@@ -3,7 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPanel } from '../../src/components/SettingsPanel';
 import { i18nReady } from '../../src/i18n';
-import { loadSettings, saveSettings } from '../../src/core/llm/settings-service';
+import {
+  isLlmSettingsPersistenceEnabled,
+  loadSettings,
+  saveSettings,
+} from '../../src/core/llm/settings-service';
 import { DEFAULT_LLM_SETTINGS } from '../../src/core/llm/types';
 
 describe('SettingsPanel custom provider generation settings', () => {
@@ -63,5 +67,19 @@ describe('SettingsPanel custom provider generation settings', () => {
       customProviders: [],
       activeCustomProviderId: undefined,
     });
+  });
+
+  it('applies the remembered API key preference only after settings are saved', async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel isOpen onClose={vi.fn()} />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Remember API keys on this device' }));
+    expect(isLlmSettingsPersistenceEnabled()).toBe(true);
+    expect(localStorage.getItem('gitnexus-llm-settings')).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Save Settings' }));
+    expect(isLlmSettingsPersistenceEnabled()).toBe(false);
+    expect(localStorage.getItem('gitnexus-llm-settings')).toBeNull();
+    expect(loadSettings()).toMatchObject({ activeProvider: 'custom' });
   });
 });

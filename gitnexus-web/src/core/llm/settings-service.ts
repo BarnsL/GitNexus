@@ -1,7 +1,7 @@
 /**
  * Settings Service
  *
- * Handles localStorage persistence for LLM provider settings.
+ * Handles browser-storage persistence for LLM provider settings.
  * All API keys are stored locally - never sent to any server except the LLM provider.
  */
 
@@ -27,6 +27,7 @@ import { DEFAULT_OPENROUTER_BASE_URL, DEFAULT_OLLAMA_BASE_URL } from '../../conf
 import { resilientFetch } from 'gitnexus-shared';
 
 const STORAGE_KEY = 'gitnexus-llm-settings';
+const PERSISTENCE_STORAGE_KEY = 'gitnexus-llm-settings-persistence';
 
 type CustomProviderSettingsUpdate = Partial<Omit<CustomProviderEntry, 'id'>> & {
   customProviderId?: string;
@@ -129,27 +130,72 @@ const writeSettings = (storage: Storage, settings: LLMSettings): void => {
 };
 
 /**
- * Load settings from sessionStorage (migrates legacy localStorage once).
+ * Provider settings are remembered on this browser profile unless the user
+ * explicitly opted out. Storage failures still leave the active tab usable.
+ */
+export const isLlmSettingsPersistenceEnabled = (): boolean => {
+  try {
+    return (
+      typeof localStorage === 'undefined' ||
+      localStorage.getItem(PERSISTENCE_STORAGE_KEY) !== 'false'
+    );
+  } catch {
+    return true;
+  }
+};
+
+/**
+ * Store the non-secret persistence preference. Disabling it immediately
+ * removes the durable provider record; the caller retains the session copy.
+ */
+export const setLlmSettingsPersistence = (enabled: boolean): void => {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(PERSISTENCE_STORAGE_KEY, enabled ? 'true' : 'false');
+    if (!enabled) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch (error) {
+    console.warn('Failed to update LLM settings persistence:', error);
+  }
+};
+
+/**
+ * Load provider settings, preferring the durable copy when remembering is on.
+ * A session-only record is promoted on first load so current configurations
+ * survive the first browser restart after this feature is introduced.
  */
 export const loadSettings = (): LLMSettings => {
   try {
-    const sessionData = typeof sessionStorage !== 'undefined' ? readSettings(sessionStorage) : null;
-    if (sessionData) {
-      return mergeWithDefaults(sessionData);
-    }
+    const shouldPersist = isLlmSettingsPersistenceEnabled();
+    const durableData =
+      shouldPersist && typeof localStorage !== 'undefined' ? readSettings(localStorage) : null;
 
-    const legacyData = typeof localStorage !== 'undefined' ? readSettings(localStorage) : null;
-    if (legacyData) {
-      const merged = mergeWithDefaults(legacyData);
+    if (durableData) {
+      const merged = mergeWithDefaults(durableData);
       try {
         if (typeof sessionStorage !== 'undefined') {
           writeSettings(sessionStorage, merged);
         }
-        if (typeof localStorage !== 'undefined') {
-          localStorage.removeItem(STORAGE_KEY);
-        }
       } catch (error) {
-        console.warn('Failed to migrate legacy LLM settings to sessionStorage:', error);
+        console.warn('Failed to mirror durable LLM settings to sessionStorage:', error);
+      }
+      return merged;
+    }
+
+    if (!shouldPersist && typeof localStorage !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+
+    const sessionData = typeof sessionStorage !== 'undefined' ? readSettings(sessionStorage) : null;
+    if (sessionData) {
+      const merged = mergeWithDefaults(sessionData);
+      if (shouldPersist && typeof localStorage !== 'undefined') {
+        try {
+          writeSettings(localStorage, merged);
+        } catch (error) {
+          console.warn('Failed to promote LLM settings to durable storage:', error);
+        }
       }
       return merged;
     }
@@ -162,7 +208,7 @@ export const loadSettings = (): LLMSettings => {
 };
 
 /**
- * Save settings to sessionStorage
+ * Save settings to the active session and, when enabled, this browser profile.
  */
 export const saveSettings = (settings: LLMSettings): void => {
   try {
@@ -170,7 +216,18 @@ export const saveSettings = (settings: LLMSettings): void => {
       writeSettings(sessionStorage, settings);
     }
   } catch (error) {
-    console.error('Failed to save LLM settings:', error);
+    console.error('Failed to save LLM session settings:', error);
+  }
+
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (isLlmSettingsPersistenceEnabled()) {
+      writeSettings(localStorage, settings);
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to save durable LLM settings:', error);
   }
 };
 

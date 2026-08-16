@@ -224,7 +224,7 @@ export type ProviderConfig =
   | CustomProviderConfig;
 
 /**
- * Stored settings (what goes to localStorage)
+ * Provider configuration stored in sessionStorage and, when remembered, localStorage.
  */
 export interface LLMSettings {
   activeProvider: LLMProvider;
