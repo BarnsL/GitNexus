@@ -117,7 +117,8 @@
       "label": "Graph view mode",
       "force": "Force Graph",
       "tree": "Sequential Layout",
-      "circles": "Radial Layout"
+      "circles": "Radial Layout",
+      "runtime": "Runtime Activity"
     },
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",

@@ -477,13 +477,17 @@ CLI (analyze.ts) → runFullAnalysis(repoPath, options, callbacks)
   ├── lbug.lock      # Single-writer lock
   ├── lbug.{wal,shadow}.dirty-recovery  # parked sidecars from a crashed run; safe to delete
   ├── gitnexus.json  # lastCommit, indexedAt, stats (primary metadata file)
-  └── meta.json      # legacy mirror of gitnexus.json, kept in sync (see MIGRATION.md)
+  ├── meta.json      # legacy mirror of gitnexus.json, kept in sync (see MIGRATION.md)
+  └── runtime/
+      └── profile.json  # atomic repository-specific runtime model
 
 ~/.gitnexus/
   └── registry.json  # Global repo registry (MCP discovery)
 ```
 
 Managed by `repo-manager.ts`.
+
+Runtime Intelligence is scheduled only after the server publishes a healthy index. It uses the profile JSON for application components, evidence, launch and trace plans, semantic visualization rules, and optimistic generations. The browser performs optional AI review through the configured Nexus AI provider; the server receives only a constrained decision. See [RUNTIME-INTELLIGENCE.md](RUNTIME-INTELLIGENCE.md).
 
 ## LadybugDB schema
 
@@ -532,4 +536,5 @@ Node IDs use arity suffix (`#<paramCount>`): `Method:file:Class.method#1` vs `#2
 - [RUNBOOK.md](RUNBOOK.md) — operational commands and recovery
 - [GUARDRAILS.md](GUARDRAILS.md) — safety boundaries for humans and agents
 - [TESTING.md](TESTING.md) — how to run tests
+- [RUNTIME-INTELLIGENCE.md](RUNTIME-INTELLIGENCE.md) - runtime discovery, advisor safety, and visualization lifecycle
 - `AGENTS.md` / `CLAUDE.md` — agent workflows and tool usage

@@ -136,8 +136,8 @@ interface AppState {
   setDepthFilter: (depth: number | null) => void;
 
   // Graph view mode
-  graphViewMode: 'force' | 'tree' | 'circles';
-  setGraphViewMode: (mode: 'force' | 'tree' | 'circles') => void;
+  graphViewMode: 'force' | 'tree' | 'circles' | 'runtime';
+  setGraphViewMode: (mode: 'force' | 'tree' | 'circles' | 'runtime') => void;
 
   // Graph load mode (full download vs chat-only / skipped graph)
   graphMode: GraphMode;
@@ -164,7 +164,7 @@ interface AppState {
 
   // Node animations (for MCP tool visual feedback)
   animatedNodes: Map<string, NodeAnimation>;
-  triggerNodeAnimation: (nodeIds: string[], type: AnimationType) => void;
+  triggerNodeAnimation: (nodeIds: string[], type: AnimationType, durationMs?: number) => void;
   clearAnimations: () => void;
 
   // Progress
@@ -323,32 +323,39 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
   const [animatedNodes, setAnimatedNodes] = useState<Map<string, NodeAnimation>>(new Map());
   const animationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const triggerNodeAnimation = useCallback((nodeIds: string[], type: AnimationType) => {
-    const now = Date.now();
-    const duration = type === 'pulse' ? 2000 : type === 'ripple' ? 3000 : 4000;
+  const triggerNodeAnimation = useCallback(
+    (nodeIds: string[], type: AnimationType, durationMs?: number) => {
+      const now = Date.now();
+      const defaultDuration = type === 'pulse' ? 2000 : type === 'ripple' ? 3000 : 4000;
+      const duration =
+        typeof durationMs === 'number' && Number.isFinite(durationMs)
+          ? Math.max(50, Math.min(10_000, durationMs))
+          : defaultDuration;
 
-    setAnimatedNodes((prev) => {
-      const next = new Map(prev);
-      for (const id of nodeIds) {
-        next.set(id, { type, startTime: now, duration });
-      }
-      return next;
-    });
-
-    // Auto-cleanup after duration
-    setTimeout(() => {
       setAnimatedNodes((prev) => {
         const next = new Map(prev);
         for (const id of nodeIds) {
-          const anim = next.get(id);
-          if (anim && anim.startTime === now) {
-            next.delete(id);
-          }
+          next.set(id, { type, startTime: now, duration });
         }
         return next;
       });
-    }, duration + 100);
-  }, []);
+
+      // Auto-cleanup after duration
+      setTimeout(() => {
+        setAnimatedNodes((prev) => {
+          const next = new Map(prev);
+          for (const id of nodeIds) {
+            const anim = next.get(id);
+            if (anim && anim.startTime === now) {
+              next.delete(id);
+            }
+          }
+          return next;
+        });
+      }, duration + 100);
+    },
+    [],
+  );
 
   const clearAnimations = useCallback(() => {
     setAnimatedNodes(new Map());

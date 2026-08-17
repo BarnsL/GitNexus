@@ -25,8 +25,14 @@ import { EventEmitter } from 'node:events';
 // must be hoisted with it.
 const H = vi.hoisted(() => ({
   forkMock: vi.fn(),
-  STORAGE_PATH: '/tmp/gitnexus-test-storage',
-  REPO_PATH: '/tmp/gitnexus-test-repo',
+  STORAGE_PATH:
+    process.platform === 'win32'
+      ? String.raw`D:\tmp\gitnexus-test-storage`
+      : '/tmp/gitnexus-test-storage',
+  REPO_PATH:
+    process.platform === 'win32'
+      ? String.raw`D:\tmp\gitnexus-test-repo`
+      : '/tmp/gitnexus-test-repo',
   METADATA_FILE: 'gitnexus.json',
 }));
 const { forkMock, REPO_PATH } = H;
@@ -102,6 +108,7 @@ describe('createLaunchAnalysisWorker — collapsed index is never published', ()
   let calls: string[];
   let backendInit: Mock<() => Promise<unknown>>;
   let closeDbHandle: Mock<() => Promise<void>>;
+  let onPublished: Mock<(repoPath: string) => void>;
 
   /** Drive one analyze to its terminal state and return the observed call order. */
   const runWorker = async (msg: CompleteMessage) => {
@@ -111,10 +118,13 @@ describe('createLaunchAnalysisWorker — collapsed index is never published', ()
       acquireRepoLock: () => null,
       releaseRepoLock: () => {},
       closeDbHandle,
+      onPublished,
     });
 
     const job = jobManager.createJob({ repoPath: REPO_PATH });
     launch(job, REPO_PATH, {});
+    expect(forkMock).toHaveBeenCalledTimes(1);
+    expect(child.listenerCount('message')).toBe(1);
     child.emit('message', msg);
 
     await vi.waitFor(() => expect(calls).toContain('updateJob:terminal'));
@@ -133,6 +143,10 @@ describe('createLaunchAnalysisWorker — collapsed index is never published', ()
     });
     closeDbHandle = vi.fn(async () => {
       calls.push('closeDbHandle');
+    });
+    onPublished = vi.fn((repoPath: string) => {
+      expect(repoPath).toBe(REPO_PATH);
+      calls.push('onPublished');
     });
 
     const realUpdate = jobManager.updateJob.bind(jobManager);
@@ -166,6 +180,7 @@ describe('createLaunchAnalysisWorker — collapsed index is never published', ()
     // disk, so a pre-rewrite handle is stale whatever the outcome was. Eviction
     // is not publication.
     expect(closeDbHandle).toHaveBeenCalledTimes(1);
+    expect(onPublished).not.toHaveBeenCalled();
     expect(calls.indexOf('closeDbHandle')).toBeLessThan(calls.indexOf('updateJob:failed'));
   });
 
@@ -194,6 +209,7 @@ describe('createLaunchAnalysisWorker — collapsed index is never published', ()
       'updateJob:analyzing',
       'closeDbHandle',
       'backend.init',
+      'onPublished',
       'updateJob:complete',
       'updateJob:terminal',
     ]);

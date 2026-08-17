@@ -12,6 +12,7 @@ import {
   Network,
   GitBranch,
   Target,
+  Activity,
 } from '@/lib/lucide-icons';
 import { useSigma } from '../hooks/useSigma';
 import { useAppState } from '../hooks/useAppState';
@@ -25,6 +26,7 @@ import {
 } from '../lib/graph-adapter';
 import type { GraphNode } from 'gitnexus-shared';
 import { QueryFAB } from './QueryFAB';
+import { RuntimeActivityPanel } from './RuntimeActivityPanel';
 import Graph from 'graphology';
 import { useTranslation } from 'react-i18next';
 import { LARGE_GRAPH_NODE_THRESHOLD } from '../config/ui-constants';
@@ -45,7 +47,6 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     openCodePanel,
     depthFilter,
     highlightedNodeIds,
-    setHighlightedNodeIds,
     aiCitationHighlightedNodeIds,
     aiToolHighlightedNodeIds,
     blastRadiusNodeIds,
@@ -122,24 +123,6 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     setSelectedNode(null);
   }, [setSelectedNode]);
 
-  const handleToggleAIHighlights = useCallback(() => {
-    if (isAIHighlightsEnabled) {
-      clearAIToolHighlights();
-      clearAICitationHighlights();
-      clearBlastRadius();
-      setSelectedNode(null);
-      setSigmaSelectedNode(null);
-    }
-    toggleAIHighlights();
-  }, [
-    isAIHighlightsEnabled,
-    clearAIToolHighlights,
-    clearAICitationHighlights,
-    clearBlastRadius,
-    setSelectedNode,
-    toggleAIHighlights,
-  ]);
-
   const {
     containerRef,
     sigmaRef,
@@ -164,15 +147,35 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     layoutMode: graphViewMode,
   });
 
-  const handleViewModeChange = useCallback(
-    (mode: 'force' | 'tree' | 'circles') => {
-      if (mode === graphViewMode) return;
+  const handleToggleAIHighlights = useCallback(() => {
+    if (isAIHighlightsEnabled) {
+      clearAIToolHighlights();
+      clearAICitationHighlights();
+      clearBlastRadius();
       setSelectedNode(null);
       setSigmaSelectedNode(null);
-      setHoveredNodeName(null);
+    }
+    toggleAIHighlights();
+  }, [
+    isAIHighlightsEnabled,
+    clearAIToolHighlights,
+    clearAICitationHighlights,
+    clearBlastRadius,
+    setSelectedNode,
+    setSigmaSelectedNode,
+    toggleAIHighlights,
+  ]);
+
+  const handleViewModeChange = useCallback(
+    (mode: 'force' | 'tree' | 'circles' | 'runtime') => {
+      if (mode === graphViewMode) return;
+      if (mode !== 'runtime') {
+        setSelectedNode(null);
+        setSigmaSelectedNode(null);
+        setHoveredNodeName(null);
+        resetZoom();
+      }
       setGraphViewMode(mode);
-      // Reset zoom when switching views
-      resetZoom();
     },
     [graphViewMode, resetZoom, setGraphViewMode, setSelectedNode, setSigmaSelectedNode],
   );
@@ -202,6 +205,10 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     // overlay covers the canvas, and this guard also future-proofs against a
     // transient where a populated graph is set while mode is still chat-only.
     if (!graph || graphMode === 'chatOnly') return;
+    if (graphViewMode === 'runtime') {
+      stopLayout();
+      return;
+    }
 
     let sigmaGraph: Graph<SigmaNodeAttributes, SigmaEdgeAttributes>;
 
@@ -226,7 +233,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     }
 
     setSigmaGraph(sigmaGraph);
-  }, [graph, graphMode, nodeById, setSigmaGraph, graphViewMode]);
+  }, [graph, graphMode, nodeById, setSigmaGraph, graphViewMode, stopLayout]);
 
   // Update node visibility when filters change
   useEffect(() => {
@@ -355,6 +362,20 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
           <Target className="h-3.5 w-3.5" />
           {t('canvas.viewModes.circles')}
         </button>
+        <div className="mx-0.5 w-px self-stretch bg-border-subtle" />
+        <button
+          role="tab"
+          aria-selected={graphViewMode === 'runtime'}
+          onClick={() => handleViewModeChange('runtime')}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+            graphViewMode === 'runtime'
+              ? 'bg-green-600 text-white'
+              : 'text-text-secondary hover:bg-hover hover:text-text-primary'
+          }`}
+        >
+          <Activity className="h-3.5 w-3.5" />
+          {t('canvas.viewModes.runtime')}
+        </button>
       </div>
 
       {/* Sigma container */}
@@ -362,6 +383,13 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
         ref={containerRef}
         className="sigma-container h-full w-full cursor-grab active:cursor-grabbing"
       />
+
+      {/* Runtime Activity full-page view (overlays sigma when active) */}
+      {graphViewMode === 'runtime' && (
+        <div className="absolute inset-0 z-10 bg-deep">
+          <RuntimeActivityPanel variant="fullpage" />
+        </div>
+      )}
 
       {/* Chat-only empty state (#2178): graph download was skipped for a large
           project. Chat works normally; offer an explicit "load anyway" escape. */}
@@ -414,73 +442,75 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
       )}
 
       {/* Graph Controls - Bottom Right */}
-      <div className="absolute right-4 bottom-4 z-10 flex flex-col gap-1">
-        <button
-          onClick={zoomIn}
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-elevated text-text-secondary transition-colors hover:bg-hover hover:text-text-primary"
-          title={t('canvas.zoomIn')}
-        >
-          <ZoomIn className="h-4 w-4" />
-        </button>
-        <button
-          onClick={zoomOut}
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-elevated text-text-secondary transition-colors hover:bg-hover hover:text-text-primary"
-          title={t('canvas.zoomOut')}
-        >
-          <ZoomOut className="h-4 w-4" />
-        </button>
-        <button
-          onClick={resetZoom}
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-elevated text-text-secondary transition-colors hover:bg-hover hover:text-text-primary"
-          title={t('canvas.fit')}
-        >
-          <Maximize2 className="h-4 w-4" />
-        </button>
-
-        {/* Divider */}
-        <div className="my-1 h-px bg-border-subtle" />
-
-        {/* Focus on selected */}
-        {appSelectedNode && (
+      {graphViewMode !== 'runtime' && (
+        <div className="absolute right-4 bottom-4 z-10 flex flex-col gap-1">
           <button
-            onClick={handleFocusSelected}
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-accent/30 bg-accent/20 text-accent transition-colors hover:bg-accent/30"
-            title={t('canvas.focusSelected')}
-          >
-            <Focus className="h-4 w-4" />
-          </button>
-        )}
-
-        {/* Clear selection */}
-        {sigmaSelectedNode && (
-          <button
-            onClick={handleClearSelection}
+            onClick={zoomIn}
             className="flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-elevated text-text-secondary transition-colors hover:bg-hover hover:text-text-primary"
-            title={t('canvas.clearSelection')}
+            title={t('canvas.zoomIn')}
           >
-            <RotateCcw className="h-4 w-4" />
+            <ZoomIn className="h-4 w-4" />
           </button>
-        )}
+          <button
+            onClick={zoomOut}
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-elevated text-text-secondary transition-colors hover:bg-hover hover:text-text-primary"
+            title={t('canvas.zoomOut')}
+          >
+            <ZoomOut className="h-4 w-4" />
+          </button>
+          <button
+            onClick={resetZoom}
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-elevated text-text-secondary transition-colors hover:bg-hover hover:text-text-primary"
+            title={t('canvas.fit')}
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
 
-        {/* Divider */}
-        <div className="my-1 h-px bg-border-subtle" />
+          {/* Divider */}
+          <div className="my-1 h-px bg-border-subtle" />
 
-        {/* Layout control */}
-        <button
-          onClick={isLayoutRunning ? stopLayout : startLayout}
-          className={`flex h-9 w-9 items-center justify-center rounded-md border transition-all ${
-            isLayoutRunning
-              ? 'animate-pulse border-accent bg-accent text-white shadow-glow'
-              : 'border-border-subtle bg-elevated text-text-secondary hover:bg-hover hover:text-text-primary'
-          } `}
-          title={isLayoutRunning ? t('canvas.stopLayout') : t('canvas.runLayout')}
-        >
-          {isLayoutRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-        </button>
-      </div>
+          {/* Focus on selected */}
+          {appSelectedNode && (
+            <button
+              onClick={handleFocusSelected}
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-accent/30 bg-accent/20 text-accent transition-colors hover:bg-accent/30"
+              title={t('canvas.focusSelected')}
+            >
+              <Focus className="h-4 w-4" />
+            </button>
+          )}
+
+          {/* Clear selection */}
+          {sigmaSelectedNode && (
+            <button
+              onClick={handleClearSelection}
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-elevated text-text-secondary transition-colors hover:bg-hover hover:text-text-primary"
+              title={t('canvas.clearSelection')}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+          )}
+
+          {/* Divider */}
+          <div className="my-1 h-px bg-border-subtle" />
+
+          {/* Layout control */}
+          <button
+            onClick={isLayoutRunning ? stopLayout : startLayout}
+            className={`flex h-9 w-9 items-center justify-center rounded-md border transition-all ${
+              isLayoutRunning
+                ? 'animate-pulse border-accent bg-accent text-white shadow-glow'
+                : 'border-border-subtle bg-elevated text-text-secondary hover:bg-hover hover:text-text-primary'
+            } `}
+            title={isLayoutRunning ? t('canvas.stopLayout') : t('canvas.runLayout')}
+          >
+            {isLayoutRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </button>
+        </div>
+      )}
 
       {/* Layout running indicator */}
-      {isLayoutRunning && (
+      {graphViewMode !== 'runtime' && isLayoutRunning && (
         <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 animate-fade-in items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/20 px-3 py-1.5 backdrop-blur-sm">
           <div className="h-2 w-2 animate-ping rounded-full bg-emerald-400" />
           <span className="text-xs font-medium text-emerald-400">

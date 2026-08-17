@@ -62,7 +62,7 @@ interface UseSigmaOptions {
   blastRadiusNodeIds?: Set<string>;
   animatedNodes?: Map<string, NodeAnimation>;
   visibleEdgeTypes?: EdgeType[];
-  layoutMode?: 'force' | 'tree' | 'circles';
+  layoutMode?: 'force' | 'tree' | 'circles' | 'runtime';
 }
 
 interface UseSigmaReturn {
@@ -1538,6 +1538,7 @@ export const useSigma = (options: UseSigmaOptions = {}): UseSigmaReturn => {
   }, [setSelectedNode]);
 
   const startLayout = useCallback(() => {
+    if (options.layoutMode === 'runtime') return;
     const graph = graphRef.current;
     if (!graph || graph.order === 0) return;
     if (options.layoutMode === 'tree') {

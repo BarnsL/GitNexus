@@ -217,6 +217,20 @@ program
   .action(createLazyAction(() => import('./index-repo.js'), 'indexCommand'));
 
 program
+  .command('runtime [command...]')
+  .description('Run an app with live runtime execution tracing into the GitNexus UI')
+  .allowUnknownOption(true)
+  .option('--server <url>', 'GitNexus serve URL', 'http://localhost:4747')
+  .option('--repo <path>', 'Repository root to map runtime files against')
+  .option('--interval <ms>', 'Runtime aggregation/sampling window (50-5000 ms)', '100')
+  .option(
+    '--browser-cdp <url>',
+    'Also trace browser JS through Chrome/Edge DevTools (e.g. http://127.0.0.1:9222)',
+  )
+  .option('--debug', 'Log runtime probe transport errors')
+  .action(createLazyAction(() => import('./trace.js'), 'traceCommand'));
+
+program
   .command('serve')
   .description('Start local HTTP server for web UI connection')
   .option('-p, --port <port>', 'Port number', '4747')

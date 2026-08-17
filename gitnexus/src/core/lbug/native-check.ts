@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'node:module';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { ensureWindowsExtensionRuntimePath } from './extension-runtime-path.js';
 
 /** Cap the out-of-process native load probe so a hung filesystem cannot wedge a
  *  CLI startup gate (same bounding rationale as the extension probe below). */
@@ -475,6 +476,8 @@ async function probeExtensionLoad(
   extension: 'fts' | 'vector',
   timeoutMs: number,
 ): Promise<ExtensionProbeResult> {
+  ensureWindowsExtensionRuntimePath();
+
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<ExtensionProbeResult>((resolve) => {
     timer = setTimeout(

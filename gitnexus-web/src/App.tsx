@@ -24,6 +24,7 @@ import { ERROR_RESET_DELAY_MS } from './config/ui-constants';
 import { parseSkipGraphParam } from './lib/graph-load-decision';
 import { formatBackendError } from './i18n/error-messages';
 import { useTranslation } from 'react-i18next';
+import { RuntimeActivityPanel } from './components/RuntimeActivityPanel';
 
 /**
  * Restore-param preference for the auto-connect effect: `repo` carries the
@@ -61,6 +62,7 @@ const AppContent = () => {
     setAvailableRepos,
     switchRepo,
     setCurrentRepo,
+    graphViewMode,
   } = useAppState();
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -359,6 +361,8 @@ const AppContent = () => {
         </div>
       )}
 
+      {/* Floating runtime panel (hidden when full-page runtime tab is active) */}
+      {graphViewMode !== 'runtime' && <RuntimeActivityPanel />}
       {/* Settings Panel (modal) */}
       <SettingsPanel
         isOpen={isSettingsPanelOpen}

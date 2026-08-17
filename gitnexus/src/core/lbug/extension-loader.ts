@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'node:url';
 import { LBUG_MAX_DB_SIZE } from './lbug-config.js';
 import { diagnoseExtensionLoad, type ExtensionLoadDiagnosis } from './extension-load-error.js';
+import { ensureWindowsExtensionRuntimePath } from './extension-runtime-path.js';
 import { logger } from '../logger.js';
 
 const DEFAULT_EXTENSION_INSTALL_TIMEOUT_MS = 15_000;
@@ -237,6 +238,8 @@ export class ExtensionManager {
     if (!EXTENSION_NAME_PATTERN.test(name)) {
       throw new Error(`Invalid DuckDB extension name: ${name}`);
     }
+
+    ensureWindowsExtensionRuntimePath();
 
     const policy = opts.policy ?? this.options.policy ?? resolvePolicyFromEnv();
     const timeoutMs =

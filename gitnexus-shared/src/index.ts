@@ -28,6 +28,23 @@ export type { MroStrategy } from './mro-strategy.js';
 // Pipeline progress
 export type { PipelinePhase, PipelineProgress } from './pipeline.js';
 
+// Repository-specific runtime discovery and visualization metadata
+export type {
+  RuntimeAppKind,
+  RuntimeTracerKind,
+  RuntimeSemanticKind,
+  RuntimeAnimationType,
+  RuntimeEvidence,
+  RuntimeLaunchCommand,
+  RuntimeTracePlan,
+  RuntimeComponentProfile,
+  RuntimeVisualizationRule,
+  RuntimeHypothesis,
+  RuntimeObservationSummary,
+  RuntimeIntelligenceProfile,
+  RuntimeAdvisorDecision,
+} from './runtime-intelligence.js';
+
 // ─── Scope-based resolution — RFC #909 (Ring 1 #910) ────────────────────────
 // Data model (RFC §2)
 export type {

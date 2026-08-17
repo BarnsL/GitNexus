@@ -133,6 +133,20 @@ Use when the browser UI should talk to **local** indexed repos instead of WASM-o
 
 ---
 
+## Live runtime tracing and intelligence
+
+The graph path command remains `gitnexus trace <from> <to>`. Run an application with live execution tracing through the separate runtime command:
+
+```bash
+cd gitnexus
+npx gitnexus runtime -- npm run dev
+npx gitnexus runtime -- python app.py
+```
+
+Open the **Runtime Activity** graph tab to inspect events and the repository-specific Runtime Intelligence model. The profile is stored at `<repo>/.gitnexus/runtime/profile.json`. Use the panel's Refresh action to repeat deterministic discovery after manifest or entrypoint changes.
+
+---
+
 ## CLI equivalents of MCP tools
 
 Useful for debugging without an editor:
@@ -173,6 +187,8 @@ Analyze re-execs Node with a **large old-space heap** when needed (`analyze.ts`)
 Only one process should open a repo's `.gitnexus/lbug` store at a time. If MCP and a second `analyze` run conflict, stop one process, then retry `analyze` or restart MCP.
 
 If the error text is `"Only one write transaction at a time is allowed in the system."` instead of a lock/busy message, it's the same underlying conflict — our retry matcher (`isDbBusyError` in `src/core/lbug/lbug-config.ts`) recognizes this exact string and auto-retries it. The fix if it still surfaces after retries is the same: stop the overlapping process.
+
+On Windows, FTS and VECTOR extensions require OpenSSL 3 at extension load time. GitNexus automatically prepends the trusted Git for Windows runtime directory when both required DLLs are present under `C:\Program Files\Git\mingw64\bin`. This changes only the current process PATH. Run `npx gitnexus doctor` to confirm that **Full-text search** and **VECTOR index** both report `available`.
 
 ---
 

@@ -40,6 +40,8 @@ export interface LaunchDeps {
    * before the rewrite keeps reading the pre-rewrite state until evicted.
    */
   closeDbHandle: () => Promise<void>;
+  /** Runs after a healthy index is published and before the job reports complete. */
+  onPublished?: (repoPath: string) => void;
 }
 
 export interface LaunchOptions {
@@ -123,7 +125,8 @@ const waitForSettledIndex = async (targetPath: string, jobStartMs: number): Prom
 };
 
 export function createLaunchAnalysisWorker(deps: LaunchDeps) {
-  const { jobManager, backend, acquireRepoLock, releaseRepoLock, closeDbHandle } = deps;
+  const { jobManager, backend, acquireRepoLock, releaseRepoLock, closeDbHandle, onPublished } =
+    deps;
 
   return function launchAnalysisWorker(
     job: { id: string },
@@ -264,6 +267,7 @@ export function createLaunchAnalysisWorker(deps: LaunchDeps) {
               // ordering comment above the chain true — the repo really is
               // queryable when the client receives the SSE complete event.
               return backend.init().then(() => {
+                onPublished?.(targetPath);
                 jobManager.updateJob(job.id, { status: 'complete', repoName: msg.result.repoName });
               });
             })

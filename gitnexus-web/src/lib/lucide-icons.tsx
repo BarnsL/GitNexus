@@ -109,6 +109,7 @@ export {
   User,
   Variable,
   X,
+  Activity,
   Zap,
   ZoomIn,
   ZoomOut,

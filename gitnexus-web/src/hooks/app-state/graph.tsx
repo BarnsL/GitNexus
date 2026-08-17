@@ -19,8 +19,8 @@ interface GraphStateContextValue {
   setDepthFilter: (depth: number | null) => void;
   highlightedNodeIds: Set<string>;
   setHighlightedNodeIds: (ids: Set<string>) => void;
-  graphViewMode: 'force' | 'tree' | 'circles';
-  setGraphViewMode: (mode: 'force' | 'tree' | 'circles') => void;
+  graphViewMode: 'force' | 'tree' | 'circles' | 'runtime';
+  setGraphViewMode: (mode: 'force' | 'tree' | 'circles' | 'runtime') => void;
   /**
    * Whether the in-memory graph was downloaded ('full') or skipped for a large
    * project ('chatOnly'). In chat-only mode `graph` is an empty-but-non-null
@@ -48,7 +48,9 @@ export const GraphStateProvider = ({ children }: { children: ReactNode }) => {
   const [visibleEdgeTypes, setVisibleEdgeTypes] = useState<EdgeType[]>(DEFAULT_VISIBLE_EDGES);
   const [depthFilter, setDepthFilter] = useState<number | null>(null);
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set());
-  const [graphViewMode, setGraphViewMode] = useState<'force' | 'tree' | 'circles'>('force');
+  const [graphViewMode, setGraphViewMode] = useState<'force' | 'tree' | 'circles' | 'runtime'>(
+    'force',
+  );
   const [graphMode, setGraphMode] = useState<GraphMode>('full');
   const [chatOnlyNodeCount, setChatOnlyNodeCount] = useState<number | null>(null);
 
