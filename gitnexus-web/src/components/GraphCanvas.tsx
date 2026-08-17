@@ -30,9 +30,24 @@ import Graph from 'graphology';
 import { useTranslation } from 'react-i18next';
 import { LARGE_GRAPH_NODE_THRESHOLD } from '../config/ui-constants';
 import { shouldConfirmGraphLoad } from '../lib/graph-load-decision';
+import type { CameraState, NeighborQueryDirection, NeighborEdge } from '../hooks/useSigma';
 
+/**
+ * Imperative surface for driving the graph from outside the canvas.
+ *
+ * This is the only boundary through which the camera and the underlying
+ * graphology instance are reachable; Sigma itself stays encapsulated in
+ * useSigma. Nexus AI's graph tools operate exclusively through these methods.
+ */
 export interface GraphCanvasHandle {
-  focusNode: (nodeId: string) => void;
+  focusNode: (nodeId: string, opts?: { zoom?: number; duration?: number }) => void;
+  frameNodes: (nodeIds: string[], opts?: { padding?: number; duration?: number }) => void;
+  getCameraState: () => CameraState | null;
+  setCameraState: (state: CameraState, durationMs?: number) => void;
+  getNeighbors: (
+    nodeId: string,
+    opts?: { depth?: number; direction?: NeighborQueryDirection; edgeTypes?: string[] },
+  ) => NeighborEdge[];
 }
 
 export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
@@ -130,6 +145,10 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     zoomOut,
     resetZoom,
     focusNode,
+    frameNodes,
+    getCameraState,
+    setCameraState,
+    getNeighbors,
     isLayoutRunning,
     startLayout,
     stopLayout,
@@ -179,11 +198,11 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     [graphViewMode, resetZoom, setGraphViewMode, setSelectedNode, setSigmaSelectedNode],
   );
 
-  // Expose focusNode to parent via ref
+  // Expose the imperative graph-driving surface to the parent via ref.
   useImperativeHandle(
     ref,
     () => ({
-      focusNode: (nodeId: string) => {
+      focusNode: (nodeId: string, opts?: { zoom?: number; duration?: number }) => {
         // Also update app state so the selection syncs properly
         if (graph) {
           const node = nodeById.get(nodeId);
@@ -192,10 +211,24 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
             openCodePanel();
           }
         }
-        focusNode(nodeId);
+        focusNode(nodeId, opts);
       },
+      frameNodes,
+      getCameraState,
+      setCameraState,
+      getNeighbors,
     }),
-    [focusNode, graph, nodeById, setSelectedNode, openCodePanel],
+    [
+      focusNode,
+      frameNodes,
+      getCameraState,
+      setCameraState,
+      getNeighbors,
+      graph,
+      nodeById,
+      setSelectedNode,
+      openCodePanel,
+    ],
   );
 
   // Update Sigma graph when KnowledgeGraph changes

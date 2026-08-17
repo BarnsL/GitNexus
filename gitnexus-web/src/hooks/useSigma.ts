@@ -7,7 +7,47 @@ import noverlap from 'graphology-layout-noverlap';
 import EdgeCurveProgram from '@sigma/edge-curve';
 import { SigmaNodeAttributes, SigmaEdgeAttributes } from '../lib/graph-adapter';
 import type { NodeAnimation } from './useAppState';
-import type { EdgeType } from '../lib/constants';
+import { type EdgeType, isRelationshipRendered } from '../lib/constants';
+import { computeBoundingBoxCamera } from '../lib/camera-geometry';
+
+/** Camera ratio used when focusing a single node. */
+const DEFAULT_FOCUS_RATIO = 0.15;
+const DEFAULT_FOCUS_DURATION_MS = 400;
+const DEFAULT_FRAME_PADDING = 1.4;
+const DEFAULT_FRAME_DURATION_MS = 500;
+/** Tolerance for treating the camera as already at the target. */
+const CAMERA_EPSILON = 1e-3;
+/** Neighbor walks are bounded; deeper traversals return unreadable result sets. */
+const MAX_NEIGHBOR_DEPTH = 3;
+
+export interface CameraState {
+  x: number;
+  y: number;
+  ratio: number;
+  angle: number;
+}
+
+/** Direction of a single traversed edge, relative to the origin node. */
+export type NeighborDirection = 'in' | 'out';
+
+/** Direction filter accepted when requesting neighbors. */
+export type NeighborQueryDirection = NeighborDirection | 'both';
+
+export interface NeighborEdge {
+  nodeId: string;
+  name: string;
+  label: string;
+  filePath?: string;
+  relationship: string;
+  direction: NeighborDirection;
+  /** Hops from the origin node, starting at 1. */
+  depth: number;
+  /**
+   * Whether this relationship type is currently drawn. False means filtered
+   * out or not renderable — never that the relationship is absent.
+   */
+  rendered: boolean;
+}
 // Helper: Parse hex color to RGB
 const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -72,7 +112,14 @@ interface UseSigmaReturn {
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
-  focusNode: (nodeId: string) => void;
+  focusNode: (nodeId: string, opts?: { zoom?: number; duration?: number }) => void;
+  frameNodes: (nodeIds: string[], opts?: { padding?: number; duration?: number }) => void;
+  getCameraState: () => CameraState | null;
+  setCameraState: (state: CameraState, durationMs?: number) => void;
+  getNeighbors: (
+    nodeId: string,
+    opts?: { depth?: number; direction?: NeighborQueryDirection; edgeTypes?: string[] },
+  ) => NeighborEdge[];
   isLayoutRunning: boolean;
   startLayout: () => void;
   stopLayout: () => void;
@@ -586,19 +633,12 @@ export const useSigma = (options: UseSigmaOptions = {}): UseSigmaReturn => {
       edgeReducer: (edge, data) => {
         const res = { ...data };
 
-        // Check edge type visibility first.
-        // HAS_METHOD / HAS_PROPERTY are Kotlin/Java hierarchy edges not in the
-        // EdgeType union — normalize them so they follow DEFINES / CONTAINS
-        // visibility instead of being silently hidden.
+        // Check edge type visibility first. Normalization of the non-union
+        // hierarchy edges lives in isRelationshipRendered so the neighbor walk
+        // and the renderer agree on what counts as drawn.
         const visibleTypes = visibleEdgeTypesRef.current;
         if (visibleTypes && data.relationType) {
-          const normalizedType =
-            data.relationType === 'HAS_METHOD'
-              ? 'DEFINES'
-              : data.relationType === 'HAS_PROPERTY'
-                ? 'CONTAINS'
-                : data.relationType;
-          if (!visibleTypes.includes(normalizedType as EdgeType)) {
+          if (!isRelationshipRendered(data.relationType, visibleTypes)) {
             res.hidden = true;
             return res;
           }
@@ -1503,26 +1543,139 @@ export const useSigma = (options: UseSigmaOptions = {}): UseSigmaReturn => {
     ],
   );
 
-  const focusNode = useCallback((nodeId: string) => {
+  const focusNode = useCallback((nodeId: string, opts?: { zoom?: number; duration?: number }) => {
     const sigma = sigmaRef.current;
     const graph = graphRef.current;
     if (!sigma || !graph || !graph.hasNode(nodeId)) return;
-
-    // Skip if already focused on this node (prevents double-click issues)
-    const alreadySelected = selectedNodeRef.current === nodeId;
 
     // Set selection state directly (without the camera nudge from setSelectedNode)
     selectedNodeRef.current = nodeId;
     setSelectedNodeState(nodeId);
 
-    // Only animate camera if selecting a new node
-    if (!alreadySelected) {
-      const nodeAttrs = graph.getNodeAttributes(nodeId);
-      sigma.getCamera().animate({ x: nodeAttrs.x, y: nodeAttrs.y, ratio: 0.15 }, { duration: 400 });
+    const nodeAttrs = graph.getNodeAttributes(nodeId);
+    const camera = sigma.getCamera();
+    const targetRatio = opts?.zoom ?? DEFAULT_FOCUS_RATIO;
+    const state = camera.getState();
+
+    // Only the camera animation is conditional. This used to skip everything
+    // when the node was already selected, which meant a repeat call from the
+    // agent silently did nothing. Selection and refresh now always run; the
+    // animation is skipped only when the camera is already effectively there,
+    // which still prevents the double-click jitter it was guarding against.
+    const settled =
+      Math.abs(state.x - nodeAttrs.x) < CAMERA_EPSILON &&
+      Math.abs(state.y - nodeAttrs.y) < CAMERA_EPSILON &&
+      Math.abs(state.ratio - targetRatio) < CAMERA_EPSILON;
+
+    if (!settled) {
+      camera.animate(
+        { x: nodeAttrs.x, y: nodeAttrs.y, ratio: targetRatio },
+        { duration: opts?.duration ?? DEFAULT_FOCUS_DURATION_MS },
+      );
     }
 
     sigma.refresh();
   }, []);
+
+  /** Fit the camera around a set of nodes, for showing a whole call chain. */
+  const frameNodes = useCallback(
+    (nodeIds: string[], opts?: { padding?: number; duration?: number }) => {
+      const sigma = sigmaRef.current;
+      const graph = graphRef.current;
+      if (!sigma || !graph) return;
+
+      const points = nodeIds
+        .filter((id) => graph.hasNode(id))
+        .map((id) => {
+          const attrs = graph.getNodeAttributes(id);
+          return { x: attrs.x, y: attrs.y };
+        });
+
+      const target = computeBoundingBoxCamera(points, opts?.padding ?? DEFAULT_FRAME_PADDING);
+      if (!target) return;
+
+      sigma.getCamera().animate(target, { duration: opts?.duration ?? DEFAULT_FRAME_DURATION_MS });
+    },
+    [],
+  );
+
+  const getCameraState = useCallback((): CameraState | null => {
+    const sigma = sigmaRef.current;
+    if (!sigma) return null;
+    const { x, y, ratio, angle } = sigma.getCamera().getState();
+    return { x, y, ratio, angle };
+  }, []);
+
+  const setCameraState = useCallback((state: CameraState, durationMs?: number) => {
+    const sigma = sigmaRef.current;
+    if (!sigma) return;
+    sigma.getCamera().animate(state, { duration: durationMs ?? DEFAULT_FOCUS_DURATION_MS });
+  }, []);
+
+  /**
+   * Walk outward from a node, reporting each neighbor with the relationship
+   * that reached it. The `rendered` flag says whether that relationship type
+   * is currently drawn — callers must not report a hidden edge as nonexistent.
+   */
+  const getNeighbors = useCallback(
+    (
+      nodeId: string,
+      opts?: { depth?: number; direction?: NeighborQueryDirection; edgeTypes?: string[] },
+    ): NeighborEdge[] => {
+      const graph = graphRef.current;
+      if (!graph || !graph.hasNode(nodeId)) return [];
+
+      const depth = Math.max(1, Math.min(MAX_NEIGHBOR_DEPTH, opts?.depth ?? 1));
+      const direction = opts?.direction ?? 'both';
+      const wanted = opts?.edgeTypes?.length ? new Set(opts.edgeTypes) : null;
+      const visibleTypes = visibleEdgeTypesRef.current;
+
+      const seen = new Set<string>([nodeId]);
+      const results: NeighborEdge[] = [];
+      let frontier = [nodeId];
+
+      for (let hop = 0; hop < depth; hop += 1) {
+        const next: string[] = [];
+
+        for (const current of frontier) {
+          graph.forEachEdge(current, (_edge, attrs, source, target) => {
+            const isOutgoing = source === current;
+            const other = isOutgoing ? target : source;
+            const edgeDirection: NeighborDirection = isOutgoing ? 'out' : 'in';
+
+            if (direction !== 'both' && direction !== edgeDirection) return;
+
+            const relationship = String(
+              (attrs as { relationType?: string }).relationType ?? 'UNKNOWN',
+            );
+            if (wanted && !wanted.has(relationship)) return;
+            if (seen.has(other)) return;
+
+            seen.add(other);
+            next.push(other);
+
+            const attributes = graph.getNodeAttributes(other);
+            results.push({
+              nodeId: other,
+              name: String(attributes.label ?? other),
+              label: String(attributes.nodeType ?? 'CodeElement'),
+              filePath: attributes.filePath,
+              relationship,
+              direction: edgeDirection,
+              depth: hop + 1,
+              rendered: isRelationshipRendered(relationship, visibleTypes),
+            });
+          });
+        }
+
+        frontier = next;
+        if (frontier.length === 0) break;
+      }
+
+      return results;
+    },
+    [],
+  );
 
   const zoomIn = useCallback(() => {
     sigmaRef.current?.getCamera().animatedZoom({ duration: 200 });
@@ -1566,6 +1719,10 @@ export const useSigma = (options: UseSigmaOptions = {}): UseSigmaReturn => {
     zoomOut,
     resetZoom,
     focusNode,
+    frameNodes,
+    getCameraState,
+    setCameraState,
+    getNeighbors,
     isLayoutRunning,
     startLayout,
     stopLayout,

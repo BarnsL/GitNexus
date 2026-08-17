@@ -161,6 +161,37 @@ export const DEFAULT_VISIBLE_EDGES: EdgeType[] = [
   'CALLS',
 ];
 
+/**
+ * Map a raw relationship type onto the renderable EdgeType union.
+ *
+ * HAS_METHOD / HAS_PROPERTY are Kotlin/Java hierarchy edges outside the union;
+ * they follow DEFINES / CONTAINS visibility instead of being silently hidden.
+ * Anything else outside the union has no renderable equivalent and returns null.
+ */
+export const normalizeEdgeType = (relationType: string): EdgeType | null => {
+  if (relationType === 'HAS_METHOD') return 'DEFINES';
+  if (relationType === 'HAS_PROPERTY') return 'CONTAINS';
+  return (ALL_EDGE_TYPES as string[]).includes(relationType) ? (relationType as EdgeType) : null;
+};
+
+/**
+ * Whether a relationship is currently drawn in the graph.
+ *
+ * A `false` here means "filtered out or not renderable", never "does not
+ * exist". Only six of the many relationship types have a renderable form, so
+ * callers reporting relationships to a user must say a hidden edge is real but
+ * not drawn rather than implying absence.
+ */
+export const isRelationshipRendered = (
+  relationType: string,
+  visibleEdgeTypes: EdgeType[] | null | undefined,
+): boolean => {
+  const normalized = normalizeEdgeType(relationType);
+  if (normalized === null) return false;
+  if (!visibleEdgeTypes) return true;
+  return visibleEdgeTypes.includes(normalized);
+};
+
 // Edge display info for UI
 export const EDGE_INFO: Record<EdgeType, { color: string; label: string }> = {
   CONTAINS: { color: '#2d5a3d', label: 'Contains' },
