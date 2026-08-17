@@ -46,6 +46,12 @@ import { ERROR_RESET_DELAY_MS } from '../config/ui-constants';
 import i18n from '../i18n';
 import { normalizePath } from '../lib/path-resolution';
 import { resolveTargets } from '../lib/target-resolution';
+import { isEditingEnabledForRepo } from '../lib/editing-preference';
+import {
+  createGraphController,
+  type HighlightChannel,
+  type NexusCanvasHandle,
+} from '../core/llm/graph-controller';
 import { FILE_REF_REGEX, NODE_REF_REGEX } from '../lib/grounding-patterns';
 import { GraphStateProvider, useGraphState, type GraphMode } from './app-state/graph';
 import { fetchRuntimeManagedRuns } from '../services/runtime-intelligence-client';
@@ -272,6 +278,10 @@ interface AppState {
   popViewHistory: () => ViewHistoryEntry | null;
   restoreViewHistory: (id: string) => ViewHistoryEntry | null;
   clearViewHistory: () => void;
+
+  /** App.tsx registers the graph canvas so agent tools can drive it. */
+  registerGraphCanvas: (handle: NexusCanvasHandle | null) => void;
+  setHighlightChannel: (nodeIds: Set<string>, channel: HighlightChannel) => void;
 }
 
 /** Cap on retained view-history entries. */
@@ -296,8 +306,11 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
     setSelectedNode,
     visibleLabels,
     toggleLabelVisibility,
+    setVisibleLabels,
     visibleEdgeTypes,
     toggleEdgeVisibility,
+    setVisibleEdgeTypes,
+    resetFilters,
     depthFilter,
     setDepthFilter,
     highlightedNodeIds,
@@ -461,6 +474,49 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
     commitViewHistory([]);
   }, [commitViewHistory]);
 
+  // Graph canvas registration.
+  //
+  // App.tsx owns the canvas ref, but the agent is constructed here, so the
+  // canvas is registered rather than threaded through initializeAgent (which
+  // is also called internally by sendChatMessage, switchRepo, and
+  // loadGraphAnyway).
+  const graphCanvasRef = useRef<NexusCanvasHandle | null>(null);
+  const registerGraphCanvas = useCallback((handle: NexusCanvasHandle | null) => {
+    graphCanvasRef.current = handle;
+  }, []);
+
+  const setHighlightChannel = useCallback((nodeIds: Set<string>, channel: HighlightChannel) => {
+    if (channel === 'ai-tool') setAIToolHighlightedNodeIds(nodeIds);
+    else if (channel === 'blast-radius') setBlastRadiusNodeIds(nodeIds);
+    else setHighlightedNodeIds(nodeIds);
+  }, []);
+
+  // Live mirror of the state the controller reads. Reassigned every render so
+  // the controller — built once — always observes current values rather than
+  // the values captured when the agent was created.
+  const controllerStateRef = useRef({
+    graph,
+    selectedNode,
+    graphViewMode,
+    visibleEdgeTypes,
+    depthFilter,
+    aiToolHighlightedNodeIds,
+    blastRadiusNodeIds,
+    highlightedNodeIds,
+    viewHistoryLength: viewHistory.length,
+  });
+  controllerStateRef.current = {
+    graph,
+    selectedNode,
+    graphViewMode,
+    visibleEdgeTypes,
+    depthFilter,
+    aiToolHighlightedNodeIds,
+    blastRadiusNodeIds,
+    highlightedNodeIds,
+    viewHistoryLength: viewHistory.length,
+  };
+
   // Progress
   const [progress, setProgress] = useState<PipelineProgress | null>(null);
 
@@ -598,6 +654,59 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
       return kept;
     });
   }, [selectedNode]);
+
+  const graphController = useMemo(
+    () =>
+      createGraphController({
+        getGraph: () => controllerStateRef.current.graph,
+        getCanvas: () => graphCanvasRef.current,
+        setHighlightChannel,
+        triggerNodeAnimation,
+        getViewMode: () => controllerStateRef.current.graphViewMode,
+        setViewMode: setGraphViewMode,
+        setVisibleEdgeTypes: (types) => setVisibleEdgeTypes(types as EdgeType[]),
+        getVisibleEdgeTypes: () => controllerStateRef.current.visibleEdgeTypes,
+        setVisibleLabels: (labels) => setVisibleLabels(labels as NodeLabel[]),
+        setDepthFilter,
+        getDepthFilter: () => controllerStateRef.current.depthFilter,
+        addCodeReference: (ref) => addCodeReference(ref),
+        resolveFilePath: (path) => resolveFilePath(path),
+        getSelectedNode: () => controllerStateRef.current.selectedNode,
+        setSelectedNode,
+        pushViewHistory,
+        getHistoryDepth: () => controllerStateRef.current.viewHistoryLength,
+        getHighlightCounts: () => ({
+          'ai-tool': controllerStateRef.current.aiToolHighlightedNodeIds.size,
+          'blast-radius': controllerStateRef.current.blastRadiusNodeIds.size,
+          query: controllerStateRef.current.highlightedNodeIds.size,
+        }),
+        // Editing is a per-repo browser preference read by the Code Inspector;
+        // the controller only reports it so the agent knows whether proposing
+        // an edit is possible.
+        isEditingEnabled: () => isEditingEnabledForRepo(repoRef.current),
+        clearHighlights: () => {
+          setAIToolHighlightedNodeIds(new Set());
+          setBlastRadiusNodeIds(new Set());
+          setHighlightedNodeIds(new Set());
+        },
+        clearAnimations,
+        resetFilters,
+      }),
+    [
+      setHighlightChannel,
+      triggerNodeAnimation,
+      setGraphViewMode,
+      setVisibleEdgeTypes,
+      setVisibleLabels,
+      setDepthFilter,
+      addCodeReference,
+      resolveFilePath,
+      setSelectedNode,
+      pushViewHistory,
+      clearAnimations,
+      resetFilters,
+    ],
+  );
 
   // Auto-add a code reference when the user selects a node in the graph/tree
   useEffect(() => {
@@ -787,7 +896,13 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
             backendReadFile(filePath, { repo }).then((r) => r.content),
         };
 
-        agentRef.current = createGraphRAGAgent(config, backend, codebaseContext, chatOnly);
+        agentRef.current = createGraphRAGAgent(
+          config,
+          backend,
+          codebaseContext,
+          chatOnly,
+          graphController,
+        );
         setIsAgentReady(true);
         setAgentError(null);
         if (import.meta.env.DEV) {
@@ -1682,6 +1797,8 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
     popViewHistory,
     restoreViewHistory,
     clearViewHistory,
+    registerGraphCanvas,
+    setHighlightChannel,
   };
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

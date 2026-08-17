@@ -15,6 +15,8 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { NODE_TABLES, REL_TYPES } from 'gitnexus-shared';
 import type { EnrichedSearchResult, GrepResult } from '../../services/backend-client';
+import { createGraphControlTools, GRAPH_CONTROL_TOOL_NAMES } from './graph-tools';
+import type { NexusGraphController } from './graph-controller';
 
 /**
  * Tool names registered by createGraphRAGTools — kept in sync with each tool's `name`
@@ -28,6 +30,7 @@ export const GRAPH_RAG_TOOL_NAMES = [
   'overview',
   'explore',
   'impact',
+  ...GRAPH_CONTROL_TOOL_NAMES,
 ] as const;
 
 const validLabel = (label: string): boolean => (NODE_TABLES as readonly string[]).includes(label);
@@ -51,7 +54,7 @@ export interface GraphRAGBackend {
 /**
  * Tool factory - creates tools bound to backend HTTP query functions
  */
-export const createGraphRAGTools = (backend: GraphRAGBackend) => {
+export const createGraphRAGTools = (backend: GraphRAGBackend, ui?: NexusGraphController) => {
   const { executeQuery, search: backendSearch, grep: backendGrep, readFile } = backend;
 
   // ============================================================================
@@ -1510,5 +1513,18 @@ Additional output sections:
   // RETURN ALL TOOLS
   // ============================================================================
 
-  return [searchTool, cypherTool, grepTool, readTool, overviewTool, exploreTool, impactTool];
+  // Graph control tools are only registered when a UI controller is supplied.
+  // Without one (chat-only mode, tests) the agent keeps its read-only tools.
+  const controlTools = ui ? createGraphControlTools(ui) : [];
+
+  return [
+    searchTool,
+    cypherTool,
+    grepTool,
+    readTool,
+    overviewTool,
+    exploreTool,
+    impactTool,
+    ...controlTools,
+  ];
 };

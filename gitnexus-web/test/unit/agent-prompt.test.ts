@@ -7,6 +7,7 @@ import {
   type GraphRAGBackend,
 } from '../../src/core/llm/tools';
 import { NODE_REF_REGEX } from '../../src/lib/grounding-patterns';
+import { createNoopGraphController } from '../../src/core/llm/graph-controller';
 
 const MINIMAL_CONTEXT: CodebaseContext = {
   stats: {
@@ -76,8 +77,19 @@ describe('BASE_SYSTEM_PROMPT tool parity', () => {
   });
 
   it('keeps GRAPH_RAG_TOOL_NAMES in sync with the tools createGraphRAGTools registers', () => {
-    const registered = createGraphRAGTools(stubBackend).map((t) => t.name);
+    // Graph control tools only register when a UI controller is supplied, so
+    // the parity check must pass one. The constant lists every registerable
+    // tool, which is what BASE_SYSTEM_PROMPT is checked against.
+    const registered = createGraphRAGTools(stubBackend, createNoopGraphController()).map(
+      (t) => t.name,
+    );
     expect(registered.sort()).toEqual([...GRAPH_RAG_TOOL_NAMES].sort());
+  });
+
+  it('omits graph control tools when no UI controller is available (chat-only)', () => {
+    const registered = createGraphRAGTools(stubBackend).map((t) => t.name);
+    expect(registered).not.toContain('focus_node');
+    expect(registered).toContain('search');
   });
 
   it('does not reference legacy or non-existent tool names', () => {
@@ -105,13 +117,12 @@ describe('BASE_SYSTEM_PROMPT tool parity', () => {
     expect(BASE_SYSTEM_PROMPT).not.toContain('INHERITS');
   });
 
-  it('clarifies highlight_in_graph is not a callable tool', () => {
-    // Reword-proof, registry-level guarantee: the load-bearing fact is that
-    // highlight_in_graph is not a registered tool, regardless of prompt phrasing.
+  it('never names highlight_in_graph, which has never been a real tool', () => {
+    // The prompt used to carry a disclaimer about this invented name. Real
+    // highlight tools now exist (highlight_nodes), so the disclaimer is gone —
+    // but the registry-level guarantee still holds and the prompt must never
+    // instruct the model to call the invented name.
     expect(GRAPH_RAG_TOOL_NAMES).not.toContain('highlight_in_graph');
-    // The prompt still addresses it explicitly...
-    expect(BASE_SYSTEM_PROMPT).toContain('highlight_in_graph');
-    // ...and must never instruct the model to call it (guards an affirmative reword).
     expect(BASE_SYSTEM_PROMPT).not.toMatch(/\b(?:use|call|invoke)\s+`?highlight_in_graph/i);
   });
 });
@@ -151,5 +162,31 @@ describe('Nexus runtime guidance', () => {
     expect(prompt).toContain('Start Web app with tracing');
     expect(prompt).toContain('npm run dev');
     expect(prompt).toMatch(/No managed runs are active/i);
+  });
+});
+
+describe('graph control prompt', () => {
+  it('documents every registered tool name', () => {
+    for (const name of GRAPH_RAG_TOOL_NAMES) {
+      expect(BASE_SYSTEM_PROMPT).toContain(name);
+    }
+  });
+
+  it('no longer claims the agent cannot move the viewport or switch view mode', () => {
+    expect(BASE_SYSTEM_PROMPT).not.toContain('You cannot programmatically zoom');
+    expect(BASE_SYSTEM_PROMPT).not.toContain('You cannot switch the view mode');
+    expect(BASE_SYSTEM_PROMPT).not.toContain('There is NO `highlight_in_graph` tool');
+  });
+
+  it('bounds camera movement to one destination per reply', () => {
+    expect(BASE_SYSTEM_PROMPT).toMatch(/at most ONE time per reply/i);
+  });
+
+  it('forbids reporting a hidden relationship as nonexistent', () => {
+    expect(BASE_SYSTEM_PROMPT).toMatch(/NEVER claim a relationship does not exist/i);
+  });
+
+  it('requires narrating what the navigation did', () => {
+    expect(BASE_SYSTEM_PROMPT).toMatch(/narrate what you just did/i);
   });
 });

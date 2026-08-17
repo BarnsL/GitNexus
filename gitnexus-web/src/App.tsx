@@ -76,9 +76,18 @@ const AppContent = () => {
     setGraphViewMode,
     graph,
     setSelectedNode,
+    registerGraphCanvas,
   } = useAppState();
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
+
+  // Hand the canvas to app state so the agent's graph tools can drive it.
+  // Runs after every render because the ref is populated by GraphCanvas's
+  // useImperativeHandle, which fires after this component's first render.
+  useEffect(() => {
+    registerGraphCanvas(graphCanvasRef.current);
+    return () => registerGraphCanvas(null);
+  });
   const [serverDisconnected, setServerDisconnected] = useState(false);
 
   const handleServerConnect = useCallback(

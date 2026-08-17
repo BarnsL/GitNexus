@@ -13,8 +13,13 @@ interface GraphStateContextValue {
   setSelectedNode: (node: GraphNode | null) => void;
   visibleLabels: NodeLabel[];
   toggleLabelVisibility: (label: NodeLabel) => void;
+  /** Replace the whole set at once — used by the agent's set_filters tool. */
+  setVisibleLabels: (labels: NodeLabel[]) => void;
   visibleEdgeTypes: EdgeType[];
   toggleEdgeVisibility: (edgeType: EdgeType) => void;
+  setVisibleEdgeTypes: (types: EdgeType[]) => void;
+  /** Restore label, edge, and depth filters to their defaults. */
+  resetFilters: () => void;
   depthFilter: number | null;
   setDepthFilter: (depth: number | null) => void;
   highlightedNodeIds: Set<string>;
@@ -66,6 +71,12 @@ export const GraphStateProvider = ({ children }: { children: ReactNode }) => {
     );
   }, []);
 
+  const resetFilters = useCallback(() => {
+    setVisibleLabels(DEFAULT_VISIBLE_LABELS);
+    setVisibleEdgeTypes(DEFAULT_VISIBLE_EDGES);
+    setDepthFilter(null);
+  }, []);
+
   const value = useMemo<GraphStateContextValue>(
     () => ({
       graph,
@@ -74,8 +85,11 @@ export const GraphStateProvider = ({ children }: { children: ReactNode }) => {
       setSelectedNode,
       visibleLabels,
       toggleLabelVisibility,
+      setVisibleLabels,
       visibleEdgeTypes,
       toggleEdgeVisibility,
+      setVisibleEdgeTypes,
+      resetFilters,
       depthFilter,
       setDepthFilter,
       highlightedNodeIds,
@@ -97,6 +111,7 @@ export const GraphStateProvider = ({ children }: { children: ReactNode }) => {
       graphViewMode,
       graphMode,
       chatOnlyNodeCount,
+      resetFilters,
     ],
   );
 

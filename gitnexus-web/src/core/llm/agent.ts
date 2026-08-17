@@ -19,6 +19,7 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatOllama } from '@langchain/ollama';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { createGraphRAGTools, type GraphRAGBackend } from './tools';
+import type { NexusGraphController } from './graph-controller';
 import type {
   AgentUserContent,
   ProviderConfig,
@@ -133,11 +134,12 @@ Cypher examples:
 - \`EXTENDS/IMPLEMENTS\`: Class inheritance.
 - Process labels use format "EntryPoint → Terminal" (heuristic, not app-defined names).
 
-## 🎯 VISUAL GROUNDING (not a tool)
-The user sees a knowledge graph alongside this chat. Citations automatically highlight nodes in the graph UI.
-- Include [[path:START-END]] and [[Type:Name]] refs as you discover relevant code — the UI highlights them for the user.
+## 🎯 VISUAL GROUNDING
+The user sees a knowledge graph alongside this chat, and you can drive it.
+- Citations \`[[path:START-END]]\` and \`[[Type:Name]]\` highlight nodes passively. Use them for every claim.
+- The graph control tools below actively move the user's view. Use them deliberately, not for every reference.
+- Rule of thumb: cite everything, navigate once. A citation is a footnote; a navigation is "look here now".
 - Prefer 2-6 high-signal references over large dumps.
-- There is NO \`highlight_in_graph\` tool. Ground with citations; the UI handles visualization.
 
 ## 📝 CRITICAL RULES
 - **impact output is trusted.** Do NOT re-validate with cypher. Optionally run suggested grep for dynamic patterns.
@@ -191,10 +193,30 @@ The UI has built-in visual effects you can trigger through your responses. Use t
 - If the user asks you to "show me" or "point out" something, cite it with \`[[...]]\` references so the corresponding nodes light up.
 - For architecture tours, sequence your citations to walk through the graph: start at the entry point, follow the call chain, and note which cluster each function belongs to.
 
-**What you CANNOT do (UI limitations):**
-- You cannot programmatically zoom the camera or move the viewport. The user controls pan/zoom with mouse/trackpad, or clicks a highlighted node to auto-zoom.
+## 🕹️ GRAPH CONTROL (you drive the user's view)
+You can move the camera, select nodes, highlight sets, switch layouts, and open source directly.
+
+- **\`focus_node\`** — Fly the camera to a symbol, select it, and open its source in the Code Inspector. Your primary "show me" action.
+- **\`show_neighbors\`** — Highlight what a symbol connects to AND return each relationship's type and direction so you can explain the consequences.
+- **\`highlight_nodes\`** — Light up a set. \`cyan\` for relevance, \`impact\` for blast radius, \`glow\` for emphasis.
+- **\`frame_nodes\`** — Fit the camera around several symbols at once. Prefer this over repeated \`focus_node\` calls when a whole chain matters equally.
+- **\`set_view_mode\`** — Switch Force, Tree, Circles, or Runtime.
+- **\`set_filters\`** — Change which node labels, edge types, or hop depth are visible.
+- **\`open_code\`** — Open a file at a line range without needing a graph node. Line numbers are 1-based.
+- **\`graph_snapshot\`** — Read what the user is currently looking at before you change it.
+- **\`clear_visuals\`** — Reset highlights or filters.
+
+**Navigation policy:**
+1. When your answer has one clear subject, call \`focus_node\` on it. Do not make the user hunt for the node — that is the single biggest failure of a graph-backed answer.
+2. Change the camera destination at most ONE time per reply. Use \`frame_nodes\` when several symbols matter equally.
+3. Always narrate what you just did: "I've focused the graph on X — the highlighted nodes around it are its callers."
+4. After \`show_neighbors\`, explain the relationships. Highlighting without explanation is an incomplete answer.
+5. Only six edge types are drawn. If \`show_neighbors\` reports a relationship as not currently drawn, say the edge is real but hidden by the current filter, and offer \`set_filters\`. NEVER claim a relationship does not exist because it is not visible.
+6. Targets resolve loosely. If a tool reports the target is ambiguous, ask the user which one or refine with a file path.
+7. The user has a "Back to previous view" control, so navigating is safe — but do not thrash the camera.
+
+**What you still cannot do:**
 - You cannot draw custom arrows or overlays. Use mermaid diagrams in your text for custom flow visualizations.
-- You cannot switch the view mode (Force/Sequential/Radial/Runtime) from your response. Tell the user which tab to click.
 
 ## 🔗 CONNECTING STATIC GRAPH + RUNTIME
 When both the graph and runtime tracing are active, you can give uniquely powerful guidance:
@@ -475,9 +497,12 @@ export const createGraphRAGAgent = (
   backend: GraphRAGBackend,
   codebaseContext?: CodebaseContext,
   chatOnly = false,
+  ui?: NexusGraphController,
 ) => {
   const model = createChatModel(config);
-  const tools = createGraphRAGTools(backend);
+  // Without a UI controller the agent keeps only its read-only tools, which is
+  // the correct shape for chat-only mode where no graph canvas is mounted.
+  const tools = createGraphRAGTools(backend, ui);
 
   // Use dynamic prompt if context is provided, otherwise use base prompt. The
   // chat-only note (graph not loaded, #2178) must apply in BOTH branches — when
