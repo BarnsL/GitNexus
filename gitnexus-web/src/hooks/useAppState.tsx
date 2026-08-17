@@ -236,6 +236,13 @@ interface AppState {
   clearAICodeReferences: () => void;
   clearCodeReferences: () => void;
   codeReferenceFocus: CodeReferenceFocus | null;
+  /**
+   * Resolve a repo-relative or partial file path to the path recorded in the
+   * graph. Exposed so consumers (RightPanel grounding clicks, agent tools) all
+   * share one resolver instead of re-implementing suffix matching.
+   */
+  resolveFilePath: (requestedPath: string) => string | null;
+  findFileNodeId: (filePath: string) => string | undefined;
 }
 
 const AppStateContext = createContext<AppState | null>(null);
@@ -1612,6 +1619,8 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
     clearAICodeReferences,
     clearCodeReferences,
     codeReferenceFocus,
+    resolveFilePath,
+    findFileNodeId,
   };
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

@@ -180,19 +180,95 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
     };
   }, [codeReferenceFocus, aiReferences]);
 
+  // Snippet fetching for AI citation cards.
+  //
+  // This used to hard-code `content: null`, so the citation highlighter below
+  // never rendered and every card fell through to "code not available". Each
+  // reference now fetches a small window around its line range.
+  const CITATION_CONTEXT_LINES = 3;
+
+  interface Snippet {
+    content: string;
+    /** 0-based absolute line index of the first line in `content`. */
+    start: number;
+    totalLines: number;
+  }
+
+  const [snippets, setSnippets] = useState<Map<string, Snippet>>(new Map());
+  const requestedSnippetIds = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const pending = aiReferences.filter((ref) => !requestedSnippetIds.current.has(ref.id));
+    if (pending.length === 0) return;
+
+    let cancelled = false;
+    for (const ref of pending) {
+      requestedSnippetIds.current.add(ref.id);
+    }
+
+    void (async () => {
+      for (const ref of pending) {
+        const hasRange = typeof ref.startLine === 'number';
+        const startLine = ref.startLine ?? 0;
+        const endLine = ref.endLine ?? startLine;
+        const windowStart = hasRange ? Math.max(0, startLine - CITATION_CONTEXT_LINES) : 0;
+        try {
+          const result = await readFile(ref.filePath, {
+            ...(hasRange
+              ? { startLine: windowStart, endLine: endLine + CITATION_CONTEXT_LINES }
+              : {}),
+            repo: currentRepo || projectName || undefined,
+          });
+          if (cancelled) return;
+          setSnippets((prev) =>
+            new Map(prev).set(ref.id, {
+              content: result.content,
+              start: result.startLine ?? windowStart,
+              totalLines: result.totalLines,
+            }),
+          );
+        } catch {
+          if (cancelled) return;
+          // Leave the entry absent so the card shows "code not available"
+          // rather than an empty highlighter.
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [aiReferences, currentRepo, projectName]);
+
   const refsWithSnippets = useMemo(() => {
     return aiReferences.map((ref) => {
+      const snippet = snippets.get(ref.id);
+      if (!snippet) {
+        return {
+          ref,
+          content: null as string | null,
+          start: 0,
+          end: 0,
+          highlightStart: 0,
+          highlightEnd: 0,
+          totalLines: 0,
+        };
+      }
+      // highlightStart/highlightEnd are 0-based offsets *within the window*;
+      // ref.startLine/endLine are 0-based absolute file lines.
+      const startLine = ref.startLine ?? 0;
+      const endLine = ref.endLine ?? startLine;
       return {
         ref,
-        content: null as string | null,
-        start: 0,
-        end: 0,
-        highlightStart: 0,
-        highlightEnd: 0,
-        totalLines: 0,
+        content: snippet.content,
+        start: snippet.start,
+        end: snippet.start + snippet.content.split('\n').length - 1,
+        highlightStart: Math.max(0, startLine - snippet.start),
+        highlightEnd: Math.max(0, endLine - snippet.start),
+        totalLines: snippet.totalLines,
       };
     });
-  }, [aiReferences]);
+  }, [aiReferences, snippets]);
 
   const selectedFilePath = selectedNode?.properties?.filePath;
   const selectedIsFile = selectedNode?.label === 'File' && !!selectedFilePath;
@@ -384,7 +460,7 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div ref={selectedViewerRef} className="scrollbar-thin min-h-0 flex-1 overflow-auto">
+            <div ref={selectedViewerRef} className="min-h-0 flex-1 scrollbar-thin overflow-auto">
               {isLoadingFile ? (
                 <div className="flex items-center justify-center gap-2 py-8 text-text-muted">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -404,12 +480,17 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                     userSelect: 'none',
                   }}
                   lineProps={(lineNumber) => {
+                    // react-syntax-highlighter passes `index + startingLineNumber`,
+                    // so `lineNumber` is the absolute 1-based file line. Graph
+                    // startLine/endLine are also absolute 1-based (ingestion emits
+                    // `startPosition.row + 1`), so these compare directly. The
+                    // previous `symStart + 1` shifted the band one line down.
                     const symStart = selectedNode?.properties?.startLine;
                     const symEnd = selectedNode?.properties?.endLine ?? symStart;
                     const isHighlighted =
                       typeof symStart === 'number' &&
-                      lineNumber >= symStart + 1 &&
-                      lineNumber <= (symEnd ?? symStart) + 1;
+                      lineNumber >= symStart &&
+                      lineNumber <= (symEnd ?? symStart);
                     return {
                       style: {
                         display: 'block',
@@ -457,7 +538,7 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                 {t('graph:codePanel.references', { count: aiReferences.length })}
               </span>
             </div>
-            <div className="scrollbar-thin min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+            <div className="min-h-0 flex-1 scrollbar-thin space-y-3 overflow-y-auto p-3">
               {refsWithSnippets.map(
                 ({ ref, content, start, highlightStart, highlightEnd, totalLines }) => {
                   const nodeColor = ref.label

@@ -26,6 +26,8 @@ export const RightPanel = () => {
     graph,
     graphMode,
     addCodeReference,
+    resolveFilePath,
+    findFileNodeId,
     // LLM / chat state
     chatMessages,
     isChatLoading,
@@ -48,24 +50,6 @@ export const RightPanel = () => {
     isChatLoading,
   );
 
-  const resolveFilePathForUI = useCallback((_requestedPath: string): string | null => {
-    return null;
-  }, []);
-
-  const findFileNodeIdForUI = useCallback(
-    (filePath: string): string | undefined => {
-      if (!graph) return undefined;
-      const target = filePath.replace(/\\/g, '/').replace(/^\.?\//, '');
-      const node = graph.nodes.find(
-        (n) =>
-          n.label === 'File' &&
-          n.properties.filePath.replace(/\\/g, '/').replace(/^\.?\//, '') === target,
-      );
-      return node?.id;
-    },
-    [graph],
-  );
-
   const handleGroundingClick = useCallback(
     (inner: string) => {
       const raw = inner.trim();
@@ -83,10 +67,10 @@ export const RightPanel = () => {
         endLine1 = parseInt(lineMatch[3] || lineMatch[2], 10);
       }
 
-      const resolvedPath = resolveFilePathForUI(rawPath);
+      const resolvedPath = resolveFilePath(rawPath);
       if (!resolvedPath) return;
 
-      const nodeId = findFileNodeIdForUI(resolvedPath);
+      const nodeId = findFileNodeId(resolvedPath);
 
       addCodeReference({
         filePath: resolvedPath,
@@ -102,7 +86,7 @@ export const RightPanel = () => {
         source: 'ai',
       });
     },
-    [addCodeReference, findFileNodeIdForUI, resolveFilePathForUI],
+    [addCodeReference, findFileNodeId, resolveFilePath],
   );
 
   // Handler for node grounding: [[Class:View]], [[Function:trigger]], etc.
@@ -130,13 +114,10 @@ export const RightPanel = () => {
         return;
       }
 
-      // 1. Highlight in graph (add to AI citation highlights)
-      // Note: This requires accessing the state setter from parent context
-      // For now, we'll add to code references which triggers the highlight
-
-      // 2. Add to Code Panel (if node has file/line info)
+      // addCodeReference also registers the node in aiCitationHighlightedNodeIds,
+      // so adding the reference is what highlights the node in the graph.
       if (node.properties.filePath) {
-        const resolvedPath = resolveFilePathForUI(node.properties.filePath);
+        const resolvedPath = resolveFilePath(node.properties.filePath);
         if (resolvedPath) {
           addCodeReference({
             filePath: resolvedPath,
@@ -150,7 +131,7 @@ export const RightPanel = () => {
         }
       }
     },
-    [graph, resolveFilePathForUI, addCodeReference],
+    [graph, resolveFilePath, addCodeReference],
   );
 
   const handleLinkClick = useCallback(
