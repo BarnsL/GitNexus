@@ -12,6 +12,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs/promises';
+import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import {
   canonicalizePath,
@@ -644,6 +645,130 @@ export const handleFileRequest = async (
   }
 };
 
+/** Maximum accepted file body. Larger writes are rejected with 413. */
+export const MAX_WRITE_BYTES = 2 * 1024 * 1024;
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '::ffff:127.0.0.1']);
+
+/**
+ * Decide whether this server may write repository files.
+ *
+ * Loopback-bound servers are only reachable from the machine running them, so
+ * editing is on by default there. Any other binding is potentially reachable by
+ * other devices, so writes stay off unless explicitly enabled.
+ */
+export const resolveFileWritePolicy = (host: string, envOverride?: string): boolean => {
+  if (envOverride === '1') return true;
+  if (envOverride === '0') return false;
+  return LOOPBACK_HOSTS.has(host);
+};
+
+/** SHA-256 of file content, used for optimistic concurrency on saves. */
+export const shaOfContent = (content: string): string =>
+  crypto.createHash('sha256').update(content, 'utf-8').digest('hex');
+
+/**
+ * Write a file inside the indexed repository.
+ *
+ * Deliberately narrow: it modifies files that already exist, never creates new
+ * ones, never follows symlinks, and refuses when the content on disk has
+ * changed since the client read it. Disabled entirely unless the server was
+ * started with writes allowed.
+ */
+export const handleFileWriteRequest = async (
+  req: { body: any },
+  res: {
+    status: (code: number) => { json: (body: any) => void };
+    json: (body: any) => void;
+  },
+  repoPath: string,
+  opts: { allowWrites: boolean },
+): Promise<void> => {
+  try {
+    if (!opts.allowWrites) {
+      res.status(403).json({
+        error:
+          'File writes are disabled on this server. Restart it with --allow-file-writes to enable editing.',
+      });
+      return;
+    }
+
+    const rawFilePath = req.body?.path;
+    if (rawFilePath === undefined || rawFilePath === '') {
+      res.status(400).json({ error: 'Missing path' });
+      return;
+    }
+    const filePath = assertString(rawFilePath, 'path');
+
+    const content = req.body?.content;
+    if (typeof content !== 'string') {
+      res.status(400).json({ error: 'Missing content' });
+      return;
+    }
+
+    const expectedSha = req.body?.expectedSha;
+    if (typeof expectedSha !== 'string' || expectedSha.length === 0) {
+      res.status(400).json({ error: 'Missing expectedSha' });
+      return;
+    }
+
+    if (Buffer.byteLength(content, 'utf-8') > MAX_WRITE_BYTES) {
+      res.status(413).json({ error: 'File too large to save' });
+      return;
+    }
+
+    // Path-injection containment — inline at the sink with the canonical
+    // path.relative idiom that CodeQL's js/path-injection sanitizer
+    // recognizes. See the equivalent barrier in handleFileRequest; the same
+    // interprocedural-analysis limitation applies at the writeFile sink, so
+    // this must not be factored out into a shared helper.
+    const repoRoot = path.resolve(repoPath);
+    const fullPath = path.resolve(repoRoot, filePath);
+    const fullRel = path.relative(repoRoot, fullPath);
+    if (fullRel.startsWith('..') || path.isAbsolute(fullRel)) {
+      res.status(403).json({ error: 'Path traversal denied' });
+      return;
+    }
+
+    // A symlink inside the repo could redirect the write outside it, so reject
+    // anything that is not a regular file. lstat does not follow links.
+    let stat;
+    try {
+      stat = await fs.lstat(fullPath);
+    } catch {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      res.status(403).json({ error: 'Refusing to write a non-regular file' });
+      return;
+    }
+
+    const current = await fs.readFile(fullPath, 'utf-8');
+    if (shaOfContent(current) !== expectedSha) {
+      res.status(409).json({
+        error: 'The file changed on disk since it was opened. Reload it before saving.',
+      });
+      return;
+    }
+
+    // Atomic replace: write a sibling temp file, then rename over the target so
+    // a crash mid-write cannot leave a truncated source file behind.
+    const tempPath = `${fullPath}.gitnexus-${process.pid}-${Date.now()}.tmp`;
+    try {
+      await fs.writeFile(tempPath, content, 'utf-8');
+      await fs.rename(tempPath, fullPath);
+    } catch (writeErr) {
+      await fs.rm(tempPath, { force: true });
+      throw writeErr;
+    }
+
+    res.json({ ok: true, sha: shaOfContent(content) });
+  } catch (err: any) {
+    res.status(statusFromError(err)).json({ error: err.message || 'Failed to write file' });
+  }
+};
+
 export const handleQueryRequest = async (
   req: express.Request,
   res: express.Response,
@@ -765,6 +890,14 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
   // any configured public origin — prevents CSRF from other devices.
   const requireTrustedOrigin = createWriteOriginGuard(host, port);
   logOriginPolicy(host);
+
+  // File writes default ON for loopback-bound servers and OFF otherwise, so
+  // exposing the server on a network never silently adds a write surface.
+  // GITNEXUS_ALLOW_FILE_WRITES=1/0 overrides in either direction.
+  const allowFileWrites = resolveFileWritePolicy(host, process.env.GITNEXUS_ALLOW_FILE_WRITES);
+  if (allowFileWrites) {
+    logger.info('File writes are enabled (Code Inspector can save to disk)');
+  }
 
   // No explicit OPTIONS route is registered. The Chromium Private Network
   // Access header is set by the global middleware above (pre-cors), and
@@ -944,7 +1077,14 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
     } else {
       launchContext = 'global';
     }
-    res.json({ version: pkg.version, launchContext, nodeVersion: process.version });
+    // fileWritesEnabled lets the web UI hide its editing toggle rather than
+    // offering an action that would fail with 403.
+    res.json({
+      version: pkg.version,
+      launchContext,
+      nodeVersion: process.version,
+      fileWritesEnabled: allowFileWrites,
+    });
   });
 
   // List all registered repos
@@ -1342,6 +1482,24 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
     }
     await handleFileRequest(req, res, entry.path);
   });
+
+  // Save a file edited in the Code Inspector.
+  // Rate-limited well below the read route (CodeQL js/missing-rate-limiting):
+  // this mutates the user's working tree. requireTrustedOrigin blocks CSRF from
+  // other devices, matching every other mutating route.
+  app.put(
+    '/api/file',
+    createRouteLimiter({ limit: 30 }),
+    requireTrustedOrigin,
+    async (req, res) => {
+      const entry = await resolveRepo(requestedRepo(req));
+      if (!entry) {
+        res.status(404).json({ error: 'Repository not found' });
+        return;
+      }
+      await handleFileWriteRequest(req, res, entry.path, { allowWrites: allowFileWrites });
+    },
+  );
 
   // Grep — regex search across file contents in the indexed repo
   // Uses filesystem-based search for memory efficiency (never loads all files into memory)

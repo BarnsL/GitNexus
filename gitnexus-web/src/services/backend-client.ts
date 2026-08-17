@@ -571,6 +571,11 @@ export interface ServerInfo {
   version: string;
   launchContext: 'npx' | 'global' | 'local';
   nodeVersion: string;
+  /**
+   * Whether this server permits PUT /api/file. Absent on older servers, which
+   * is treated as disabled so the UI never offers an action that would 403.
+   */
+  fileWritesEnabled?: boolean;
 }
 
 /** Fetch server info (version, launch context). */
@@ -914,6 +919,46 @@ export const readFile = async (
   const response = await fetchWithTimeout(`${_backendUrl}/api/file?${params}`);
   await assertOk(response);
   return response.json() as Promise<ReadFileResult>;
+};
+
+export interface WriteFileResult {
+  ok: true;
+  sha: string;
+}
+
+/**
+ * SHA-256 of file content, matching the server's shaOfContent. Used for
+ * optimistic concurrency so a save cannot silently clobber an external edit.
+ */
+export const shaOfContent = async (content: string): Promise<string> => {
+  const bytes = new TextEncoder().encode(content);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+/**
+ * Save an edited file.
+ *
+ * Never retried: fetchWithTimeout already defaults non-idempotent verbs to a
+ * single attempt, and a blindly repeated save is exactly the wrong behavior
+ * when the first one may have partially succeeded.
+ */
+export const writeFile = async (
+  filePath: string,
+  content: string,
+  expectedSha: string,
+  options?: { repo?: string },
+): Promise<WriteFileResult> => {
+  const params = [repoParam(options?.repo)].filter(Boolean).join('&');
+  const response = await fetchWithTimeout(`${_backendUrl}/api/file${params ? `?${params}` : ''}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: filePath, content, expectedSha }),
+  });
+  await assertOk(response);
+  return response.json() as Promise<WriteFileResult>;
 };
 
 /** Fetch all processes for a repo. */

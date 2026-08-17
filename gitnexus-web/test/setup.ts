@@ -40,3 +40,33 @@ beforeEach(() => {
   localStorage.removeItem('gitnexus-llm-settings-persistence');
   localStorage.removeItem(I18N_LANGUAGE_STORAGE_KEY);
 });
+
+// jsdom implements no layout, so CodeMirror's text measurement throws when it
+// calls getClientRects on a Range. Provide the minimal surface it needs; the
+// returned zero-size rects are fine because no test asserts on pixel geometry.
+if (typeof Range !== 'undefined') {
+  const emptyRect = (): DOMRect =>
+    ({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  if (!Range.prototype.getClientRects) {
+    Range.prototype.getClientRects = function getClientRects() {
+      const list: DOMRect[] = [];
+      return Object.assign(list, {
+        item: (i: number) => list[i] ?? null,
+      }) as unknown as DOMRectList;
+    };
+  }
+  if (!Range.prototype.getBoundingClientRect) {
+    Range.prototype.getBoundingClientRect = emptyRect;
+  }
+}
