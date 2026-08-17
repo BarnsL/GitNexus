@@ -183,5 +183,13 @@
     "label": "图表",
     "expandTitle": "展开",
     "loading": "正在加载图表…"
+  },
+  "navigationTrail": {
+    "back": "返回上一个视图",
+    "trail": "导航轨迹",
+    "restore": "返回：{{label}}",
+    "clear": "清除轨迹",
+    "beforeFocusing": "聚焦 {{name}} 之前",
+    "beforeViewChange": "切换到{{mode}}视图之前"
   }
 }

@@ -45,6 +45,7 @@ export {
   AlertCircle,
   AlertTriangle,
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   AtSign,
   BarChart2,

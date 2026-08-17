@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppStateProvider, useAppState } from './hooks/useAppState';
+import { AppStateProvider, useAppState, type ViewHistoryEntry } from './hooks/useAppState';
 import { DropZone } from './components/DropZone';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { Header } from './components/Header';
@@ -9,6 +9,7 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { StatusBar } from './components/StatusBar';
 import { FileTreePanel } from './components/FileTreePanel';
 import { CodeReferencesPanel } from './components/CodeReferencesPanel';
+import { NavigationTrail } from './components/NavigationTrail';
 import { getActiveProviderConfig } from './core/llm/settings-service';
 import { buildGraphFromConnectResult } from './lib/apply-connect-result';
 import {
@@ -25,6 +26,15 @@ import { parseSkipGraphParam } from './lib/graph-load-decision';
 import { formatBackendError } from './i18n/error-messages';
 import { useTranslation } from 'react-i18next';
 import { RuntimeActivityPanel } from './components/RuntimeActivityPanel';
+
+/** Camera animation length when restoring a captured view. */
+const VIEW_RESTORE_DURATION_MS = 400;
+/**
+ * How long to wait for a layout switch to settle before restoring the camera.
+ * Tree and circles layouts run their own physics and fire an animatedReset
+ * around 600ms in; restoring earlier would be overwritten.
+ */
+const LAYOUT_SETTLE_DELAY_MS = 700;
 
 /**
  * Restore-param preference for the auto-connect effect: `repo` carries the
@@ -64,6 +74,8 @@ const AppContent = () => {
     setCurrentRepo,
     graphViewMode,
     setGraphViewMode,
+    graph,
+    setSelectedNode,
   } = useAppState();
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -230,6 +242,41 @@ const AppContent = () => {
     graphCanvasRef.current?.focusNode(nodeId);
   }, []);
 
+  /**
+   * Restore a captured view.
+   *
+   * Order matters. Switching layout mode rebuilds the graphology graph,
+   * recomputes every node coordinate, and fires camera resets, so the camera
+   * can only be restored once the new layout has settled. When the mode is
+   * unchanged the camera is restored immediately.
+   */
+  const handleRestoreView = useCallback(
+    (entry: ViewHistoryEntry) => {
+      const canvas = graphCanvasRef.current;
+      if (!canvas) return;
+
+      const restoreSelection = () => {
+        const node = entry.selectedNodeId
+          ? (graph?.nodes.find((n) => n.id === entry.selectedNodeId) ?? null)
+          : null;
+        setSelectedNode(node);
+      };
+
+      if (entry.viewMode !== graphViewMode) {
+        setGraphViewMode(entry.viewMode);
+        window.setTimeout(() => {
+          if (entry.camera) canvas.setCameraState(entry.camera, VIEW_RESTORE_DURATION_MS);
+          restoreSelection();
+        }, LAYOUT_SETTLE_DELAY_MS);
+        return;
+      }
+
+      if (entry.camera) canvas.setCameraState(entry.camera, VIEW_RESTORE_DURATION_MS);
+      restoreSelection();
+    },
+    [graph, graphViewMode, setGraphViewMode, setSelectedNode],
+  );
+
   // Handle settings saved - refresh and reinitialize agent
   // NOTE: Must be defined BEFORE any conditional returns (React hooks rule)
   const handleSettingsSaved = useCallback(() => {
@@ -341,6 +388,11 @@ const AppContent = () => {
         {/* Graph area - takes remaining space */}
         <div className="relative min-w-0 flex-1">
           <GraphCanvas ref={graphCanvasRef} />
+
+          {/* Navigation trail — only visible once Nexus has moved the view */}
+          <div className="pointer-events-none absolute top-3 left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 justify-center">
+            <NavigationTrail onRestore={handleRestoreView} />
+          </div>
 
           {/* Code References Panel (overlay) - does NOT resize the graph, it overlaps on top */}
           {isCodePanelOpen && (codeReferences.length > 0 || !!selectedNode) && (

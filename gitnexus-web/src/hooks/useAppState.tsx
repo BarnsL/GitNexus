@@ -104,6 +104,27 @@ export interface CodeReferenceFocus {
   ts: number;
 }
 
+export type GraphViewMode = 'force' | 'tree' | 'circles' | 'runtime';
+
+/**
+ * A snapshot of where the user was looking, captured before Nexus moves the
+ * view on its own initiative.
+ *
+ * Automatic navigation is only acceptable if it is reversible: switching
+ * layout modes fires three independent camera resets and recomputes every node
+ * coordinate, so without this the user cannot get back to what they were
+ * reading.
+ */
+export interface ViewHistoryEntry {
+  id: string;
+  /** Short human label, e.g. "Before focusing envBaseFor". */
+  label: string;
+  camera: { x: number; y: number; ratio: number; angle: number } | null;
+  selectedNodeId: string | null;
+  viewMode: GraphViewMode;
+  ts: number;
+}
+
 interface AppState {
   // View state
   viewMode: ViewMode;
@@ -244,7 +265,17 @@ interface AppState {
    */
   resolveFilePath: (requestedPath: string) => string | null;
   findFileNodeId: (filePath: string) => string | undefined;
+
+  // View history — captured before agent-driven navigation so it is reversible
+  viewHistory: ViewHistoryEntry[];
+  pushViewHistory: (label: string, entry: Omit<ViewHistoryEntry, 'id' | 'label' | 'ts'>) => void;
+  popViewHistory: () => ViewHistoryEntry | null;
+  restoreViewHistory: (id: string) => ViewHistoryEntry | null;
+  clearViewHistory: () => void;
 }
+
+/** Cap on retained view-history entries. */
+const MAX_VIEW_HISTORY = 20;
 
 const AppStateContext = createContext<AppState | null>(null);
 
@@ -373,6 +404,62 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
       animationTimerRef.current = null;
     }
   }, []);
+
+  // View history — makes agent-driven navigation reversible.
+  //
+  // A ref mirrors the state because pop and restore must return the entry they
+  // removed. React batches state updates, so reading inside the updater would
+  // not have the value ready by the time the caller needs it.
+  const [viewHistory, setViewHistory] = useState<ViewHistoryEntry[]>([]);
+  const viewHistoryRef = useRef<ViewHistoryEntry[]>([]);
+
+  const commitViewHistory = useCallback((next: ViewHistoryEntry[]) => {
+    viewHistoryRef.current = next;
+    setViewHistory(next);
+  }, []);
+
+  const pushViewHistory = useCallback(
+    (label: string, entry: Omit<ViewHistoryEntry, 'id' | 'label' | 'ts'>) => {
+      const next = [
+        ...viewHistoryRef.current,
+        {
+          ...entry,
+          id: `vh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          label,
+          ts: Date.now(),
+        },
+      ];
+      // Drop the oldest entries rather than growing without bound.
+      commitViewHistory(
+        next.length > MAX_VIEW_HISTORY ? next.slice(next.length - MAX_VIEW_HISTORY) : next,
+      );
+    },
+    [commitViewHistory],
+  );
+
+  const popViewHistory = useCallback((): ViewHistoryEntry | null => {
+    const prev = viewHistoryRef.current;
+    if (prev.length === 0) return null;
+    const popped = prev[prev.length - 1];
+    commitViewHistory(prev.slice(0, -1));
+    return popped;
+  }, [commitViewHistory]);
+
+  /** Jump back to an earlier entry, discarding it and everything after it. */
+  const restoreViewHistory = useCallback(
+    (id: string): ViewHistoryEntry | null => {
+      const prev = viewHistoryRef.current;
+      const index = prev.findIndex((entry) => entry.id === id);
+      if (index < 0) return null;
+      commitViewHistory(prev.slice(0, index));
+      return prev[index];
+    },
+    [commitViewHistory],
+  );
+
+  const clearViewHistory = useCallback(() => {
+    commitViewHistory([]);
+  }, [commitViewHistory]);
 
   // Progress
   const [progress, setProgress] = useState<PipelineProgress | null>(null);
@@ -1590,6 +1677,11 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
     codeReferenceFocus,
     resolveFilePath,
     findFileNodeId,
+    viewHistory,
+    pushViewHistory,
+    popViewHistory,
+    restoreViewHistory,
+    clearViewHistory,
   };
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

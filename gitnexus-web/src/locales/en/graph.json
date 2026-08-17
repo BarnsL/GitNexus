@@ -183,5 +183,13 @@
     "label": "Diagram",
     "expandTitle": "Expand",
     "loading": "Loading diagram…"
+  },
+  "navigationTrail": {
+    "back": "Back to previous view",
+    "trail": "Navigation trail",
+    "restore": "Return to: {{label}}",
+    "clear": "Clear trail",
+    "beforeFocusing": "Before focusing {{name}}",
+    "beforeViewChange": "Before switching to {{mode}} view"
   }
 }
