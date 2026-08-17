@@ -91,6 +91,13 @@ describe('Header', () => {
     window.history.replaceState(null, '', '/');
   });
 
+  it('does not display the upstream repository promotion', () => {
+    render(<Header />);
+
+    expect(screen.queryByRole('link', { name: 'header:starIfCool' })).not.toBeInTheDocument();
+    expect(screen.queryByText('header:starIfCool')).not.toBeInTheDocument();
+  });
+
   it('keeps a large repository menu scrollable inside the viewport', () => {
     render(<Header availableRepos={Array.from({ length: 30 }, (_, index) => makeRepo(index))} />);
 

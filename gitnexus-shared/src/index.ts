@@ -43,6 +43,14 @@ export type {
   RuntimeObservationSummary,
   RuntimeIntelligenceProfile,
   RuntimeAdvisorDecision,
+  RuntimeManagedActionKind,
+  RuntimeManagedRunState,
+  RuntimeManagedAction,
+  RuntimeManagedOutputEntry,
+  RuntimeManagedRun,
+  RuntimeManagedRunSnapshot,
+  RuntimeManagedRunStartRequest,
+  RuntimeManagedRunStopRequest,
 } from './runtime-intelligence.js';
 
 // ─── Scope-based resolution — RFC #909 (Ring 1 #910) ────────────────────────

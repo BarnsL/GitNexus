@@ -1,4 +1,11 @@
-import type { RuntimeAdvisorDecision, RuntimeIntelligenceProfile } from 'gitnexus-shared';
+import type {
+  RuntimeAdvisorDecision,
+  RuntimeIntelligenceProfile,
+  RuntimeManagedRun,
+  RuntimeManagedRunSnapshot,
+  RuntimeManagedRunStartRequest,
+  RuntimeManagedRunStopRequest,
+} from 'gitnexus-shared';
 import { getAuthToken, getBackendUrl } from './backend-client';
 
 export class RuntimeIntelligenceRequestError extends Error {
@@ -17,7 +24,7 @@ const headers = (): Headers => {
   return result;
 };
 
-const profileResponse = async (response: Response): Promise<RuntimeIntelligenceProfile> => {
+const jsonResponse = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
     let detail = '';
     try {
@@ -31,7 +38,7 @@ const profileResponse = async (response: Response): Promise<RuntimeIntelligenceP
       response.status,
     );
   }
-  return (await response.json()) as RuntimeIntelligenceProfile;
+  return (await response.json()) as T;
 };
 
 const baseUrl = (explicit?: string | null): string =>
@@ -42,7 +49,7 @@ export async function fetchRuntimeIntelligenceProfile(
   backendUrl?: string | null,
 ): Promise<RuntimeIntelligenceProfile> {
   const base = baseUrl(backendUrl);
-  return await profileResponse(
+  return await jsonResponse<RuntimeIntelligenceProfile>(
     await fetch(`${base}/api/runtime-intelligence/profile?repo=${encodeURIComponent(repo)}`, {
       headers: headers(),
     }),
@@ -54,7 +61,7 @@ export async function refreshRuntimeIntelligenceProfile(
   backendUrl?: string | null,
 ): Promise<RuntimeIntelligenceProfile> {
   const base = baseUrl(backendUrl);
-  return await profileResponse(
+  return await jsonResponse<RuntimeIntelligenceProfile>(
     await fetch(`${base}/api/runtime-intelligence/profile/refresh`, {
       method: 'POST',
       headers: headers(),
@@ -70,11 +77,52 @@ export async function saveRuntimeAdvisorDecision(
   backendUrl?: string | null,
 ): Promise<RuntimeIntelligenceProfile> {
   const base = baseUrl(backendUrl);
-  return await profileResponse(
+  return await jsonResponse<RuntimeIntelligenceProfile>(
     await fetch(`${base}/api/runtime-intelligence/profile/advisor`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ repo, expectedGeneration, decision }),
+    }),
+  );
+}
+
+export async function fetchRuntimeManagedRuns(
+  repo: string,
+  backendUrl?: string | null,
+): Promise<RuntimeManagedRunSnapshot> {
+  const base = baseUrl(backendUrl);
+  return await jsonResponse<RuntimeManagedRunSnapshot>(
+    await fetch(`${base}/api/runtime-intelligence/runs?repo=${encodeURIComponent(repo)}`, {
+      headers: headers(),
+    }),
+  );
+}
+
+export async function startRuntimeManagedRun(
+  request: RuntimeManagedRunStartRequest,
+  backendUrl?: string | null,
+): Promise<RuntimeManagedRun> {
+  const base = baseUrl(backendUrl);
+  return await jsonResponse<RuntimeManagedRun>(
+    await fetch(`${base}/api/runtime-intelligence/runs`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(request),
+    }),
+  );
+}
+
+export async function stopRuntimeManagedRun(
+  runId: string,
+  request: RuntimeManagedRunStopRequest,
+  backendUrl?: string | null,
+): Promise<RuntimeManagedRun> {
+  const base = baseUrl(backendUrl);
+  return await jsonResponse<RuntimeManagedRun>(
+    await fetch(`${base}/api/runtime-intelligence/runs/${encodeURIComponent(runId)}/stop`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(request),
     }),
   );
 }

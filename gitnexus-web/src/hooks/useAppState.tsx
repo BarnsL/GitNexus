@@ -47,6 +47,7 @@ import i18n from '../i18n';
 import { normalizePath } from '../lib/path-resolution';
 import { FILE_REF_REGEX, NODE_REF_REGEX } from '../lib/grounding-patterns';
 import { GraphStateProvider, useGraphState, type GraphMode } from './app-state/graph';
+import { fetchRuntimeManagedRuns } from '../services/runtime-intelligence-client';
 
 export const AUTO_START_EMBEDDINGS_STORAGE_KEY = 'gitnexus.autoStartEmbeddings';
 
@@ -675,6 +676,13 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
 
         const executeQuery = (cypher: string) => backendRunQuery(cypher, repo);
         const codebaseContext = await buildCodebaseContext(executeQuery, effectiveProjectName);
+        if (repo) {
+          try {
+            codebaseContext.runtime = await fetchRuntimeManagedRuns(repo);
+          } catch (caught) {
+            console.warn('Runtime Intelligence actions are unavailable to Nexus AI:', caught);
+          }
+        }
 
         const backend = {
           executeQuery,

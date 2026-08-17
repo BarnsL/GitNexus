@@ -708,14 +708,6 @@ export const HelpPanel = ({ isOpen, onClose, nodeCount, edgeCount }: HelpPanelPr
           }}
         >
           <span style={{ fontSize: 11, color: '#4b5563' }}>{t('footerLong')}</span>
-          <a
-            href="https://github.com/abhigyanpatwari/GitNexus"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ fontSize: 11, color: '#a78bfa', textDecoration: 'none' }}
-          >
-            {t('docsGithub')}
-          </a>
         </div>
       </div>
     </div>

@@ -91,4 +91,20 @@ describe('Runtime Activity profile updates', () => {
 
     expect(screen.getByText('0 active')).toBeInTheDocument();
   });
+
+  it('renders one bottom dock and reveals the complete event table on expansion', () => {
+    render(<RuntimeActivityPanel />);
+
+    const dock = screen.getByTestId('runtime-activity-dock');
+    expect(dock).toHaveAttribute('data-state', 'compact');
+    expect(screen.getByRole('button', { name: 'Expand Runtime Activity' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Runtime Activity' }));
+
+    expect(dock).toHaveAttribute('data-state', 'expanded');
+    expect(screen.getByRole('button', { name: 'Collapse Runtime Activity' })).toBeInTheDocument();
+    for (const heading of ['Time', 'Runtime', 'PID', 'Function', 'File', 'Calls', 'Duration']) {
+      expect(screen.getByText(heading)).toBeInTheDocument();
+    }
+  });
 });

@@ -3,9 +3,7 @@ import {
   Settings,
   HelpCircle,
   Sparkles,
-  Github,
   GitBranch,
-  Star,
   FolderOpen,
   ChevronDown,
   Trash2,
@@ -568,19 +566,6 @@ export const Header = ({
 
       {/* Right section */}
       <div className="flex items-center gap-2">
-        {/* GitHub Star Button (icon-only; no nag text) */}
-        <a
-          href="https://github.com/abhigyanpatwari/GitNexus"
-          target="_blank"
-          rel="noopener noreferrer"
-          title={t('header:starIfCool')}
-          aria-label={t('header:starIfCool')}
-          className="group flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-3 py-2 text-sm font-medium text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:from-purple-500 hover:to-pink-500 hover:shadow-xl"
-        >
-          <Github className="h-4 w-4" />
-          <Star className="h-3.5 w-3.5 transition-all group-hover:fill-yellow-300 group-hover:text-yellow-300" />
-        </a>
-
         {/* Stats — hidden in chat-only mode, where the empty-but-non-null graph
             would otherwise show a misleading "0 nodes / 0 edges" (#2178). */}
         {graph && graphMode !== 'chatOnly' && (

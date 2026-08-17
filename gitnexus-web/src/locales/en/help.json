@@ -46,7 +46,6 @@
   "footer": "GitNexus — graph explorer",
   "title": "Help & Reference",
   "footerLong": "GitNexus — open source codebase graph explorer",
-  "docsGithub": "Docs & GitHub ↗",
   "overview": {
     "gettingStarted": "Getting started",
     "whatIsTitle": "What is GitNexus?",

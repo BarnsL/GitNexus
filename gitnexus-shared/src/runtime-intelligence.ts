@@ -142,3 +142,58 @@ export interface RuntimeAdvisorDecision {
   hypotheses?: RuntimeHypothesis[];
   confidence?: number;
 }
+
+export type RuntimeManagedActionKind = 'trace-app' | 'trace-browser';
+
+export type RuntimeManagedRunState = 'starting' | 'running' | 'stopping' | 'exited' | 'failed';
+
+export interface RuntimeManagedAction {
+  id: string;
+  componentId: string;
+  kind: RuntimeManagedActionKind;
+  title: string;
+  description: string;
+  commandPreview: string;
+  workingDirectory: string;
+  tracers: RuntimeTracerKind[];
+  enabled: boolean;
+  disabledReason?: string;
+}
+
+export interface RuntimeManagedOutputEntry {
+  seq: number;
+  ts: number;
+  stream: 'stdout' | 'stderr' | 'system';
+  text: string;
+}
+
+export interface RuntimeManagedRun {
+  id: string;
+  actionId: string;
+  componentId: string;
+  kind: RuntimeManagedActionKind;
+  state: RuntimeManagedRunState;
+  pid?: number;
+  startedAt: number;
+  endedAt?: number;
+  exitCode?: number;
+  errorCode?: string;
+  error?: string;
+  output: RuntimeManagedOutputEntry[];
+}
+
+export interface RuntimeManagedRunSnapshot {
+  profileGeneration: number;
+  actions: RuntimeManagedAction[];
+  runs: RuntimeManagedRun[];
+}
+
+export interface RuntimeManagedRunStartRequest {
+  repo: string;
+  expectedGeneration: number;
+  actionId: string;
+}
+
+export interface RuntimeManagedRunStopRequest {
+  repo: string;
+}

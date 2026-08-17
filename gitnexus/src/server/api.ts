@@ -77,6 +77,7 @@ import { createLaunchAnalysisWorker } from './analyze-launch.js';
 import { RuntimeActivityHub, mountRuntimeActivityEndpoints } from './runtime-activity.js';
 import { mountRuntimeIntelligenceEndpoints } from './runtime-intelligence-api.js';
 import { RuntimeIntelligenceCoordinator } from '../runtime-intelligence/coordinator.js';
+import { ManagedRuntimeProcessManager } from '../runtime-intelligence/managed-process-manager.js';
 import { UPLOAD_ROOT } from './upload-paths.js';
 import { sweepStaleUploads } from './upload-sweep.js';
 import { isRfc1918PrivateIpv4 } from './private-ip.js';
@@ -778,6 +779,9 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
   const jobManager = new JobManager();
   const runtimeActivity = new RuntimeActivityHub();
   const runtimeIntelligence = new RuntimeIntelligenceCoordinator();
+  const managedRuntimeProcesses = new ManagedRuntimeProcessManager({
+    endpoint: `http://127.0.0.1:${port}/api/runtime/events`,
+  });
 
   // Backstop: remove any upload staging dirs orphaned by a previous crash.
   void sweepStaleUploads().catch(() => {});
@@ -889,7 +893,13 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
 
   // Runtime execution relay: instrumented apps POST events; the browser receives them over SSE.
   mountRuntimeActivityEndpoints(app, resolveRepo, runtimeActivity, requireTrustedOrigin);
-  mountRuntimeIntelligenceEndpoints(app, resolveRepo, runtimeIntelligence, requireTrustedOrigin);
+  mountRuntimeIntelligenceEndpoints(
+    app,
+    resolveRepo,
+    runtimeIntelligence,
+    managedRuntimeProcesses,
+    requireTrustedOrigin,
+  );
 
   // Lightweight healthcheck for Docker/orchestrator probes (#1147).
   // Returns immediately so container managers do not confuse a long-lived
@@ -2036,6 +2046,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
       server.close();
       jobManager.dispose();
       runtimeActivity.dispose();
+      await managedRuntimeProcesses.dispose();
       embedJobManager.dispose();
       await cleanupMcp();
       await closeLbug();

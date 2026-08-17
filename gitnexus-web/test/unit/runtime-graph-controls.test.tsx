@@ -11,9 +11,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('../../src/components/QueryFAB', () => ({ QueryFAB: () => null }));
-vi.mock('../../src/components/RuntimeActivityPanel', () => ({
-  RuntimeActivityPanel: () => <div>runtime panel</div>,
+vi.mock('../../src/components/QueryFAB', () => ({
+  QueryFAB: () => <button type="button">Query</button>,
 }));
 
 vi.mock('../../src/hooks/useAppState', () => ({
@@ -61,11 +60,12 @@ vi.mock('../../src/hooks/useSigma', () => ({
 }));
 
 describe('Runtime Activity graph controls', () => {
-  it('stops layout and hides the graph layout control in runtime mode', async () => {
+  it('stops layout but preserves the graph and Query when runtime mode expands the dock', async () => {
     render(<GraphCanvas />);
 
     await waitFor(() => expect(H.stopLayout).toHaveBeenCalled());
-    expect(screen.queryByTitle('canvas.runLayout')).not.toBeInTheDocument();
-    expect(screen.getByText('runtime panel')).toBeInTheDocument();
+    expect(screen.getByTitle('canvas.runLayout')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Query' })).toBeInTheDocument();
+    expect(screen.queryByText('runtime panel')).not.toBeInTheDocument();
   });
 });

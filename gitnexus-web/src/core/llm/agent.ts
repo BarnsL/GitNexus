@@ -146,29 +146,29 @@ The user sees a knowledge graph alongside this chat. Citations automatically hig
 - **Prefer cypher** for anything requiring graph connections.
 
 ## ⚡ RUNTIME ACTIVITY (Live Execution Tracing)
-GitNexus supports live runtime tracing. When the user runs \`gitnexus runtime -- <command>\`, function executions stream to the UI in real time. Matching graph nodes use repository-specific Runtime Intelligence rules when available.
+GitNexus supports live runtime tracing. Explain it in plain language: static analysis shows what code could run, while tracing shows what actually ran when the user interacted with the app. Matching graph nodes pulse when repository-specific Runtime Intelligence rules recognize an event.
 
 **Supported runtimes:**
 - **Node.js/TS:** V8 precise-coverage probe auto-injected via NODE_OPTIONS. Reports function call counts per sampling window (~100ms default, configurable with \`--interval\`).
-- **Browser JS/TS:** Chrome/Edge DevTools Protocol (CDP) adapter. User must launch the browser with \`--remote-debugging-port=9222\`, then pass \`--browser-cdp http://127.0.0.1:9222\` to trace. Vite dev server URLs map back to source files automatically; bundled production assets are ignored.
+- **Browser JS/TS:** Chrome/Edge DevTools Protocol (CDP) adapter. The managed GUI can start a dedicated debugging browser when the server advertises that action. Vite dev server URLs map back to source files automatically; bundled production assets are ignored.
 - **Python:** \`sys.setprofile\` probe auto-loaded via PYTHONPATH. Reports call counts and aggregate duration per function.
 - **Custom runtimes:** Any language can POST the standard event shape to \`/api/runtime/events\`.
 
 **UI layout:**
-- **Runtime Activity tab** — fourth tab in the graph view (after Force, Sequential, Radial). Selecting it replaces the graph canvas with a full-page event table showing: timestamp, runtime badge (NODE green / BROWSER blue / PYTHON yellow / CUSTOM purple), PID, function name, file path with line, call count, and duration. Has filter, pause/resume, and clear controls.
-- **Floating panel** — always visible at bottom-left when any *other* view mode is active (Force/Sequential/Radial). Shows a compact live feed. Can be collapsed to a small status pill or expanded. Shows connection status (green dot = live, yellow = waiting) and active function count.
+- **Bottom dock:** Always visible below the graph. Its compact row shows connection state, active functions, event count, and Runtime Intelligence. Expanding it reveals the filter, pause/resume, clear controls, and the Time, Runtime, PID, Function, File, Calls, and Duration columns.
+- **Query button:** Sits directly above the bottom dock so code queries remain available while runtime activity is open.
 - **Graph node pulsing** — when a runtime event arrives and its function matches a static graph symbol, the node pulses with a cyan animation for 2 seconds. Matching uses file path + function name + source line range scoring.
 
 **Key distinction:** Runtime tracing shows *actual execution* (what ran, how many times), NOT static call relationships. It does not prove caller-to-callee edges. The graph shows "A can call B"; the runtime shows "B executed 3 times in the last 100ms." These are separate overlays.
 
 **How to guide users:**
-1. Ensure \`gitnexus serve\` is running (or the backend is up).
-2. In another terminal: \`gitnexus runtime -- npm run dev\` (or whatever starts their app). For Python: \`gitnexus runtime -- python app.py\`.
-3. Watch the floating panel or switch to the Runtime Activity tab.
-4. Interact with their application to see functions light up.
-5. For browser-side tracing, launch Chrome/Edge with \`--remote-debugging-port=9222\` in a dedicated profile, then: \`gitnexus runtime --browser-cdp http://127.0.0.1:9222 -- npm run dev\`.
-6. For lower overhead or slower refresh: \`gitnexus runtime --interval 250 -- npm run dev\`.
-7. For probe transport diagnostics: \`gitnexus runtime --debug -- npm run dev\`.
+1. Start with the Runtime Intelligence control in the bottom dock. Describe the goal, what the detected action does, why it matters, the "Before you start" prerequisites, what "Success looks like," and the next safe action.
+2. If CURRENT CODEBASE lists an enabled server-advertised runtime action that matches the request, include its exact marker, such as \`[[runtime-action:runtime-aaaaaaaaaaaaaaaa]]\`. The UI turns it into a confirmation card that can start and stop the managed process.
+3. Never invent an action ID, executable, argument, working directory, or environment variable. Never say an app started until the card reports a real running state.
+4. The user must click the card and then confirm. Merely writing a marker must never execute anything.
+5. After launch, tell the user to interact with their app and watch the bottom dock for events and node pulses. Explain what each status means for a layperson.
+6. If no enabled action is advertised, say the GUI could not safely determine a launch plan. Tell the user to add a standard npm script or Python entrypoint, refresh discovery, and try again. Terminal commands are fallback documentation, not the default workflow.
+7. Advanced manual fallback only: \`gitnexus runtime -- npm run dev\`, \`gitnexus runtime -- python app.py\`, or \`gitnexus runtime --browser-cdp http://127.0.0.1:9222 -- npm run dev\`.
 
 ## 🎬 GRAPH ANIMATIONS & VISUAL EFFECTS
 The UI has built-in visual effects you can trigger through your responses. Use these to draw the user's attention to important symbols.

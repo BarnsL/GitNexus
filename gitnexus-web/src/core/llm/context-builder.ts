@@ -5,6 +5,7 @@
  * This helps the LLM understand the project structure, scale, and key entry points
  * without needing to explore from scratch.
  */
+import type { RuntimeManagedRunSnapshot } from 'gitnexus-shared';
 
 /**
  * Codebase statistics
@@ -47,6 +48,7 @@ export interface CodebaseContext {
   stats: CodebaseStats;
   hotspots: Hotspot[];
   folderTree: string;
+  runtime?: RuntimeManagedRunSnapshot;
 }
 
 /**
@@ -372,7 +374,7 @@ export async function buildCodebaseContext(
  * Format context as markdown for prompt injection
  */
 export function formatContextForPrompt(context: CodebaseContext): string {
-  const { stats, hotspots, folderTree } = context;
+  const { stats, hotspots, folderTree, runtime } = context;
 
   const lines: string[] = [];
 
@@ -404,6 +406,34 @@ export function formatContextForPrompt(context: CodebaseContext): string {
     lines.push(stats.projectName + '/');
     lines.push(folderTree);
     lines.push('```');
+  }
+
+  if (runtime) {
+    lines.push('');
+    lines.push('### RUNTIME INTELLIGENCE ACTIONS');
+    lines.push(
+      'These are the only server-advertised actions you may offer. Never invent an action ID or claim an action ran before the user confirms its card.',
+    );
+    if (runtime.actions.length === 0) {
+      lines.push('- No managed runtime action is currently available.');
+    } else {
+      runtime.actions.forEach((action) => {
+        const availability = action.enabled ? 'enabled' : `disabled: ${action.disabledReason}`;
+        lines.push(
+          `- ${action.id}: ${action.title} (${availability}); launch plan: \`${action.commandPreview}\``,
+        );
+      });
+    }
+    const activeRuns = runtime.runs.filter(
+      (run) => run.state === 'starting' || run.state === 'running' || run.state === 'stopping',
+    );
+    if (activeRuns.length === 0) {
+      lines.push('- No managed runs are active.');
+    } else {
+      activeRuns.forEach((run) => {
+        lines.push(`- Managed run ${run.id} for ${run.actionId} is ${run.state}.`);
+      });
+    }
   }
 
   return lines.join('\n');

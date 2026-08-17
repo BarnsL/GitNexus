@@ -21,6 +21,27 @@ const MINIMAL_CONTEXT: CodebaseContext = {
   folderTree: '',
 };
 
+const RUNTIME_CONTEXT: CodebaseContext = {
+  ...MINIMAL_CONTEXT,
+  runtime: {
+    profileGeneration: 7,
+    actions: [
+      {
+        id: 'runtime-aaaaaaaaaaaaaaaa',
+        componentId: 'web',
+        kind: 'trace-app',
+        title: 'Start Web app with tracing',
+        description: 'Starts the detected app and streams function activity into the dock.',
+        commandPreview: 'npm run dev',
+        workingDirectory: '.',
+        tracers: ['node-v8-coverage'],
+        enabled: true,
+      },
+    ],
+    runs: [],
+  },
+};
+
 /** Legacy or phantom tool names that must not appear in the system prompt. */
 const FORBIDDEN_TOOL_NAMES = [
   'hybrid_search',
@@ -108,5 +129,27 @@ describe('buildDynamicSystemPrompt chat-only mode (#2178)', () => {
     const explicitFalse = buildDynamicSystemPrompt(BASE_SYSTEM_PROMPT, MINIMAL_CONTEXT, false);
     expect(full).toBe(explicitFalse);
     expect(full).not.toContain('CHAT-ONLY MODE');
+  });
+});
+
+describe('Nexus runtime guidance', () => {
+  it('teaches a layperson through the GUI and requires a safe confirmation card', () => {
+    expect(BASE_SYSTEM_PROMPT).toMatch(/plain language/i);
+    expect(BASE_SYSTEM_PROMPT).toMatch(/why (?:it|this) matters/i);
+    expect(BASE_SYSTEM_PROMPT).toMatch(/before you start/i);
+    expect(BASE_SYSTEM_PROMPT).toMatch(/success looks like/i);
+    expect(BASE_SYSTEM_PROMPT).toMatch(/next safe action/i);
+    expect(BASE_SYSTEM_PROMPT).toMatch(/Runtime Intelligence/i);
+    expect(BASE_SYSTEM_PROMPT).toMatch(/bottom dock/i);
+    expect(BASE_SYSTEM_PROMPT).toMatch(/never invent/i);
+    expect(BASE_SYSTEM_PROMPT).toContain('[[runtime-action:runtime-');
+  });
+
+  it('injects only the server-advertised action IDs and current managed state', () => {
+    const prompt = buildDynamicSystemPrompt(BASE_SYSTEM_PROMPT, RUNTIME_CONTEXT);
+    expect(prompt).toContain('runtime-aaaaaaaaaaaaaaaa');
+    expect(prompt).toContain('Start Web app with tracing');
+    expect(prompt).toContain('npm run dev');
+    expect(prompt).toMatch(/No managed runs are active/i);
   });
 });

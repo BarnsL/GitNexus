@@ -63,6 +63,7 @@ const AppContent = () => {
     switchRepo,
     setCurrentRepo,
     graphViewMode,
+    setGraphViewMode,
   } = useAppState();
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -353,6 +354,13 @@ const AppContent = () => {
         {isRightPanelOpen && <RightPanel />}
       </main>
 
+      <RuntimeActivityPanel
+        expanded={graphViewMode === 'runtime' ? true : undefined}
+        onExpandedChange={(expanded) => {
+          if (!expanded && graphViewMode === 'runtime') setGraphViewMode('force');
+        }}
+      />
+
       <StatusBar />
 
       {serverDisconnected && (
@@ -361,8 +369,6 @@ const AppContent = () => {
         </div>
       )}
 
-      {/* Floating runtime panel (hidden when full-page runtime tab is active) */}
-      {graphViewMode !== 'runtime' && <RuntimeActivityPanel />}
       {/* Settings Panel (modal) */}
       <SettingsPanel
         isOpen={isSettingsPanelOpen}

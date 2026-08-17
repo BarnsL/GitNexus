@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-interface BrowserProbeOptions {
+export interface BrowserProbeOptions {
   cdpBaseUrl: string;
   endpoint: string;
   repo: string;
@@ -13,7 +13,7 @@ interface BrowserProbeOptions {
   debug?: boolean;
 }
 
-interface BrowserProbeHandle {
+export interface BrowserProbeHandle {
   stop: () => Promise<void>;
 }
 

@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Heart } from '@/lib/lucide-icons';
 import { useAppState } from '../hooks/useAppState';
 import { useTranslation } from 'react-i18next';
 import { translateProgressMessage } from '../i18n/progress';
@@ -49,18 +48,6 @@ export const StatusBar = () => {
           </div>
         )}
       </div>
-
-      {/* Center - Sponsor (icon-only; no nag text, #2178) */}
-      <a
-        href="https://github.com/sponsors/abhigyanpatwari"
-        target="_blank"
-        rel="noopener noreferrer"
-        title={t('graph:statusBar.sponsor')}
-        aria-label={t('graph:statusBar.sponsor')}
-        className="group flex cursor-pointer items-center rounded-full border border-pink-500/20 bg-pink-500/10 p-1.5 transition-all duration-200 hover:scale-[1.02] hover:border-pink-500/40 hover:bg-pink-500/20"
-      >
-        <Heart className="h-3.5 w-3.5 animate-pulse fill-pink-500/40 text-pink-500 transition-all duration-200 group-hover:scale-110 group-hover:fill-pink-500" />
-      </a>
 
       {/* Right - Stats */}
       <div className="flex items-center gap-3" data-testid="graph-stats">

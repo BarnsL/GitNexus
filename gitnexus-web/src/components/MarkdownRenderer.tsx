@@ -7,6 +7,8 @@ import { MermaidDiagram } from './MermaidDiagram';
 import { ToolCallCard } from './ToolCallCard';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check } from '@/lib/lucide-icons';
+import { extractRuntimeActionMarkers } from '../lib/runtime-action-marker';
+import { RuntimeActionCard } from './RuntimeActionCard';
 
 // Custom syntax theme
 const customTheme = {
@@ -103,7 +105,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     [onLinkClick],
   );
 
-  const formattedContent = React.useMemo(() => formatMarkdownForDisplay(content), [content]);
+  const runtimeActions = React.useMemo(() => extractRuntimeActionMarkers(content), [content]);
+  const formattedContent = React.useMemo(
+    () => formatMarkdownForDisplay(runtimeActions.content),
+    [runtimeActions.content],
+  );
 
   const markdownComponents = React.useMemo(
     () => ({
@@ -202,6 +208,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       >
         {formattedContent}
       </ReactMarkdown>
+
+      {runtimeActions.actionIds.map((actionId) => (
+        <RuntimeActionCard key={actionId} actionId={actionId} />
+      ))}
 
       {/* Copy Button */}
       {showCopyButton && (
