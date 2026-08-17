@@ -45,6 +45,7 @@ import {
 import { ERROR_RESET_DELAY_MS } from '../config/ui-constants';
 import i18n from '../i18n';
 import { normalizePath } from '../lib/path-resolution';
+import { resolveTargets } from '../lib/target-resolution';
 import { FILE_REF_REGEX, NODE_REF_REGEX } from '../lib/grounding-patterns';
 import { GraphStateProvider, useGraphState, type GraphMode } from './app-state/graph';
 import { fetchRuntimeManagedRuns } from '../services/runtime-intelligence-client';
@@ -1030,68 +1031,36 @@ const AppStateProviderInner = ({ children }: { children: ReactNode }) => {
 
                 scheduleMessageUpdate();
 
-                // Parse highlight marker from tool results
+                // Parse visual markers from tool results. Both branches share
+                // resolveTargets so loose ids are matched the same way agent
+                // tools match them.
                 if (tc.result) {
-                  const highlightMatch = tc.result.match(/\[HIGHLIGHT_NODES:([^\]]+)\]/);
-                  if (highlightMatch) {
-                    const rawIds = highlightMatch[1]
+                  const parseMarkerIds = (marker: RegExp): string[] => {
+                    const match = tc.result?.match(marker);
+                    if (!match) return [];
+                    return match[1]
                       .split(',')
                       .map((id: string) => id.trim())
                       .filter(Boolean);
-                    if (rawIds.length > 0 && graph) {
-                      const matchedIds = new Set<string>();
-                      const graphNodeIdSet = new Set(graph.nodes.map((n) => n.id));
+                  };
 
-                      for (const rawId of rawIds) {
-                        if (graphNodeIdSet.has(rawId)) {
-                          matchedIds.add(rawId);
-                        } else {
-                          const found = graph.nodes.find(
-                            (n) => n.id.endsWith(rawId) || n.id.endsWith(':' + rawId),
-                          )?.id;
-                          if (found) {
-                            matchedIds.add(found);
-                          }
-                        }
-                      }
-
-                      if (matchedIds.size > 0) {
-                        setAIToolHighlightedNodeIds(matchedIds);
-                      }
-                    } else if (rawIds.length > 0) {
-                      setAIToolHighlightedNodeIds(new Set(rawIds));
+                  const highlightIds = parseMarkerIds(/\[HIGHLIGHT_NODES:([^\]]+)\]/);
+                  if (highlightIds.length > 0) {
+                    const { resolved } = resolveTargets(graph, highlightIds);
+                    // Without a graph there is nothing to resolve against, so
+                    // fall back to the raw ids rather than dropping the marker.
+                    const ids = graph ? resolved : highlightIds;
+                    if (ids.length > 0) {
+                      setAIToolHighlightedNodeIds(new Set(ids));
                     }
                   }
 
-                  // Parse impact marker from tool results
-                  const impactMatch = tc.result.match(/\[IMPACT:([^\]]+)\]/);
-                  if (impactMatch) {
-                    const rawIds = impactMatch[1]
-                      .split(',')
-                      .map((id: string) => id.trim())
-                      .filter(Boolean);
-                    if (rawIds.length > 0 && graph) {
-                      const matchedIds = new Set<string>();
-                      const graphNodeIdSet = new Set(graph.nodes.map((n) => n.id));
-
-                      for (const rawId of rawIds) {
-                        if (graphNodeIdSet.has(rawId)) {
-                          matchedIds.add(rawId);
-                        } else {
-                          const found = graph.nodes.find(
-                            (n) => n.id.endsWith(rawId) || n.id.endsWith(':' + rawId),
-                          )?.id;
-                          if (found) {
-                            matchedIds.add(found);
-                          }
-                        }
-                      }
-
-                      if (matchedIds.size > 0) {
-                        setBlastRadiusNodeIds(matchedIds);
-                      }
-                    } else if (rawIds.length > 0) {
-                      setBlastRadiusNodeIds(new Set(rawIds));
+                  const impactIds = parseMarkerIds(/\[IMPACT:([^\]]+)\]/);
+                  if (impactIds.length > 0) {
+                    const { resolved } = resolveTargets(graph, impactIds);
+                    const ids = graph ? resolved : impactIds;
+                    if (ids.length > 0) {
+                      setBlastRadiusNodeIds(new Set(ids));
                     }
                   }
                 }
