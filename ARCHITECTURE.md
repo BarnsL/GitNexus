@@ -489,6 +489,28 @@ Managed by `repo-manager.ts`.
 
 Runtime Intelligence is scheduled only after the server publishes a healthy index. It uses the profile JSON for application components, evidence, launch and trace plans, semantic visualization rules, and optimistic generations. The browser performs optional AI review through the configured Nexus AI provider; the server receives only a constrained decision. See [RUNTIME-INTELLIGENCE.md](RUNTIME-INTELLIGENCE.md).
 
+## Graph control surface
+
+Nexus AI drives the graph visualization through a single typed boundary rather than by emitting strings the UI parses:
+
+```
+Nexus (LangChain agent, in-browser)
+  └─ core/llm/graph-tools.ts       nine tool definitions; never throw
+      └─ NexusGraphController       resolves targets, reports ambiguity
+          └─ GraphCanvasHandle      focusNode / frameNodes / camera / neighbors
+              └─ useSigma           Sigma + graphology stay encapsulated here
+```
+
+`useSigma` owns the Sigma instance and the graphology graph; neither escapes the hook. `GraphCanvasHandle` is the only imperative surface crossing the component boundary. The controller is constructed inside `useAppState` because `initializeAgent` is also called internally by `sendChatMessage`, `switchRepo`, and `loadGraphAnyway`; `App` registers the canvas handle rather than threading it through.
+
+Target resolution is shared by the tools, grounding clicks, and the legacy `[HIGHLIGHT_NODES:…]` / `[IMPACT:…]` marker parser (`lib/target-resolution.ts`). Ambiguous targets are reported with candidates instead of resolved to the first match.
+
+Only six relationship types are renderable, so neighbor results distinguish "drawn" from "real but filtered", and `normalizeEdgeType` / `isRelationshipRendered` in `lib/constants.ts` keep the neighbor walk and the edge renderer in agreement. See [NEXUS-GRAPH-CONTROL.md](NEXUS-GRAPH-CONTROL.md).
+
+## File writes
+
+`PUT /api/file` is the only route that modifies repository source. It is disabled unless the server is loopback bound or `GITNEXUS_ALLOW_FILE_WRITES` says otherwise, and carries a rate limiter, the trusted-origin guard, inline path containment at the sink, symlink rejection, an existing-files-only rule, a 2 MB cap, SHA-based optimistic concurrency, and an atomic temp-file-plus-rename. The browser gate (a per-repository editing preference) is a convenience layer on top, not a security boundary. See [CODE-INSPECTOR.md](CODE-INSPECTOR.md).
+
 ## LadybugDB schema
 
 Defined in `lbug/schema.ts`. Separate node tables per type, single `CodeRelation` table.

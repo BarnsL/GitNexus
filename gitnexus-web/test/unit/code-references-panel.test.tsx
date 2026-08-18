@@ -31,6 +31,21 @@ vi.mock('../../src/hooks/useAppState', () => ({
 
 vi.mock('../../src/services/backend-client', () => ({
   readFile: vi.fn(),
+  // The panel now also probes the server's write policy and can save.
+  fetchServerInfo: vi.fn(async () => ({
+    version: 'test',
+    launchContext: 'local',
+    nodeVersion: 'v24',
+    fileWritesEnabled: false,
+  })),
+  writeFile: vi.fn(),
+  shaOfContent: vi.fn(async () => 'sha-test'),
+}));
+
+// CodeMirror needs real layout to mount; this suite asserts on fetch calls, not
+// on rendered source, so a stub keeps it focused.
+vi.mock('../../src/components/CodeEditor', () => ({
+  CodeEditor: ({ content }: { content: string }) => <pre>{content}</pre>,
 }));
 
 vi.mock('react-syntax-highlighter', () => ({

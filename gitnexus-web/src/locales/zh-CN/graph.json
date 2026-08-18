@@ -191,5 +191,17 @@
     "clear": "清除轨迹",
     "beforeFocusing": "聚焦 {{name}} 之前",
     "beforeViewChange": "切换到{{mode}}视图之前"
+  },
+  "editor": {
+    "readOnly": "只读",
+    "editing": "编辑中",
+    "enableEditing": "为此仓库启用编辑",
+    "disableEditing": "禁用编辑",
+    "unsaved": "未保存的更改",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "已保存",
+    "saveFailed": "保存失败：{{message}}",
+    "writesDisabled": "此服务器已禁用文件写入。请使用 --allow-file-writes 重新启动以启用编辑。"
   }
 }

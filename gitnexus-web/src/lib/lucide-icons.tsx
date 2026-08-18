@@ -92,6 +92,7 @@ export {
   RefreshCw,
   Rocket,
   RotateCcw,
+  Save,
   Search,
   Send,
   Server,

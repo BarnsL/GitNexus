@@ -10,13 +10,26 @@ import {
   Sparkles,
   MousePointerClick,
   Loader2,
+  Save,
 } from '@/lib/lucide-icons';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useAppState } from '../hooks/useAppState';
 import { type GraphNode, getSyntaxLanguageFromFilename } from 'gitnexus-shared';
 import { NODE_COLORS } from '../lib/constants';
-import { readFile, type ReadFileResult } from '../services/backend-client';
+import {
+  readFile,
+  writeFile,
+  shaOfContent,
+  fetchServerInfo,
+  type ReadFileResult,
+} from '../services/backend-client';
+import { CodeEditor, type EditorDiagnostic } from './CodeEditor';
+import { computeGraphAwareDiagnostics } from '../lib/diagnostics/graph-aware-source';
+import { isEditingEnabledForRepo, setEditingEnabledForRepo } from '../lib/editing-preference';
+
+/** Debounce before recomputing graph-aware diagnostics while typing. */
+const DIAGNOSTIC_DEBOUNCE_MS = 400;
 import { useTranslation } from 'react-i18next';
 
 const getSyntaxLanguage = (filePath: string | undefined): string => {
@@ -44,9 +57,11 @@ const customTheme = {
 
 export interface CodeReferencesPanelProps {
   onFocusNode: (nodeId: string) => void;
+  /** Fired after a successful save so the caller can schedule a re-index. */
+  onFileSaved?: (filePath: string) => void;
 }
 
-export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) => {
+export const CodeReferencesPanel = ({ onFocusNode, onFileSaved }: CodeReferencesPanelProps) => {
   const { t } = useTranslation(['common', 'graph']);
   const {
     graph,
@@ -270,6 +285,39 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
     });
   }, [aiReferences, snippets]);
 
+  // ── Editing state ─────────────────────────────────────────────────────────
+  // The buffer is separate from the fetched content so an unsaved edit is not
+  // lost when an unrelated re-render happens, and so `isDirty` is a real
+  // comparison rather than a flag someone has to remember to reset.
+  const [buffer, setBuffer] = useState<string>('');
+  const [loadedSha, setLoadedSha] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [serverAllowsWrites, setServerAllowsWrites] = useState(false);
+  const [editingPreferred, setEditingPreferred] = useState(false);
+
+  // Editing requires BOTH the server policy and the per-repo preference. The
+  // preference alone is not a security boundary.
+  const editingEnabled = serverAllowsWrites && editingPreferred;
+
+  useEffect(() => {
+    setEditingPreferred(isEditingEnabledForRepo(currentRepo));
+  }, [currentRepo]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchServerInfo()
+      .then((info) => {
+        if (!cancelled) setServerAllowsWrites(Boolean(info.fileWritesEnabled));
+      })
+      .catch(() => {
+        if (!cancelled) setServerAllowsWrites(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const selectedFilePath = selectedNode?.properties?.filePath;
   const selectedIsFile = selectedNode?.label === 'File' && !!selectedFilePath;
   const showSelectedViewer = !!selectedNode && !!selectedFilePath;
@@ -286,6 +334,56 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
 
   const selectedFileContent = fileResult?.content;
   const fileStartLine = fileResult?.startLine ?? 0;
+
+  // Reset the buffer and its concurrency baseline whenever new content loads.
+  useEffect(() => {
+    if (selectedFileContent === undefined) return;
+    setBuffer(selectedFileContent);
+    setSaveState('idle');
+    setSaveError(null);
+    void shaOfContent(selectedFileContent).then(setLoadedSha);
+  }, [selectedFileContent, selectedFilePath]);
+
+  const isDirty = selectedFileContent !== undefined && buffer !== selectedFileContent;
+
+  /** 0-based absolute range of the selected symbol, for the cyan band. */
+  const symbolRange = useMemo(() => {
+    const start = selectedNode?.properties?.startLine;
+    if (typeof start !== 'number') return null;
+    const end = selectedNode?.properties?.endLine;
+    // Graph lines are 1-based; the editor takes 0-based absolute lines.
+    return { start: start - 1, end: (typeof end === 'number' ? end : start) - 1 };
+  }, [selectedNode]);
+
+  // Graph-aware diagnostics, debounced so they do not run on every keystroke.
+  const [diagnostics, setDiagnostics] = useState<EditorDiagnostic[]>([]);
+  useEffect(() => {
+    if (!selectedFilePath) {
+      setDiagnostics([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDiagnostics(computeGraphAwareDiagnostics(graph, selectedFilePath, buffer));
+    }, DIAGNOSTIC_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [graph, selectedFilePath, buffer]);
+
+  const handleSave = useCallback(async () => {
+    if (!selectedFilePath || loadedSha === null || !editingEnabled) return;
+    setSaveState('saving');
+    setSaveError(null);
+    try {
+      const result = await writeFile(selectedFilePath, buffer, loadedSha, {
+        repo: currentRepo || projectName || undefined,
+      });
+      setLoadedSha(result.sha);
+      setSaveState('saved');
+      onFileSaved?.(selectedFilePath);
+    } catch (err) {
+      setSaveState('error');
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
+    }
+  }, [selectedFilePath, loadedSha, editingEnabled, buffer, currentRepo, projectName, onFileSaved]);
 
   useEffect(() => {
     if (!selectedFilePath) {
@@ -452,6 +550,50 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                 {selectedNode?.properties?.filePath?.split('/').pop() ??
                   selectedNode?.properties?.name}
               </span>
+              {serverAllowsWrites ? (
+                <button
+                  onClick={() => {
+                    const next = !editingPreferred;
+                    setEditingPreferred(next);
+                    setEditingEnabledForRepo(currentRepo, next);
+                  }}
+                  className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase transition-colors ${
+                    editingEnabled
+                      ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300 hover:bg-cyan-400/20'
+                      : 'border-white/15 text-text-muted hover:border-cyan-300/40 hover:text-cyan-200'
+                  }`}
+                  title={
+                    editingEnabled
+                      ? t('graph:editor.disableEditing')
+                      : t('graph:editor.enableEditing')
+                  }
+                >
+                  {editingEnabled ? t('graph:editor.editing') : t('graph:editor.readOnly')}
+                </button>
+              ) : (
+                <span
+                  className="rounded-md border border-white/10 px-2 py-0.5 text-[10px] tracking-wide text-text-muted uppercase"
+                  title={t('graph:editor.writesDisabled')}
+                >
+                  {t('graph:editor.readOnly')}
+                </span>
+              )}
+              {editingEnabled && isDirty && (
+                <button
+                  onClick={handleSave}
+                  disabled={saveState === 'saving'}
+                  className="inline-flex items-center gap-1 rounded-md border border-cyan-400/40 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-cyan-200 uppercase transition-colors hover:bg-cyan-400/20 disabled:opacity-60"
+                  title={t('graph:editor.unsaved')}
+                >
+                  <Save className="h-3 w-3" />
+                  {saveState === 'saving' ? t('graph:editor.saving') : t('graph:editor.save')}
+                </button>
+              )}
+              {saveState === 'saved' && !isDirty && (
+                <span className="text-[10px] tracking-wide text-emerald-300/80 uppercase">
+                  {t('graph:editor.saved')}
+                </span>
+              )}
               <button
                 onClick={() => setSelectedNode(null)}
                 className="rounded p-1 text-text-muted transition-colors hover:bg-amber-500/10 hover:text-amber-400"
@@ -460,6 +602,11 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                 <X className="h-4 w-4" />
               </button>
             </div>
+            {saveError && (
+              <div className="border-b border-red-500/25 bg-red-500/10 px-3 py-1.5 text-[11px] leading-4 text-red-200">
+                {t('graph:editor.saveFailed', { message: saveError })}
+              </div>
+            )}
             <div ref={selectedViewerRef} className="min-h-0 flex-1 scrollbar-thin overflow-auto">
               {isLoadingFile ? (
                 <div className="flex items-center justify-center gap-2 py-8 text-text-muted">
@@ -467,44 +614,16 @@ export const CodeReferencesPanel = ({ onFocusNode }: CodeReferencesPanelProps) =
                   <span className="text-sm">{t('graph:codePanel.loadingSource')}</span>
                 </div>
               ) : selectedFileContent ? (
-                <SyntaxHighlighter
-                  language={getSyntaxLanguage(selectedFilePath)}
-                  style={customTheme as any}
-                  showLineNumbers
-                  startingLineNumber={fileStartLine + 1}
-                  lineNumberStyle={{
-                    minWidth: '3em',
-                    paddingRight: '1em',
-                    color: '#5a5a70',
-                    textAlign: 'right',
-                    userSelect: 'none',
-                  }}
-                  lineProps={(lineNumber) => {
-                    // react-syntax-highlighter passes `index + startingLineNumber`,
-                    // so `lineNumber` is the absolute 1-based file line. Graph
-                    // startLine/endLine are also absolute 1-based (ingestion emits
-                    // `startPosition.row + 1`), so these compare directly. The
-                    // previous `symStart + 1` shifted the band one line down.
-                    const symStart = selectedNode?.properties?.startLine;
-                    const symEnd = selectedNode?.properties?.endLine ?? symStart;
-                    const isHighlighted =
-                      typeof symStart === 'number' &&
-                      lineNumber >= symStart &&
-                      lineNumber <= (symEnd ?? symStart);
-                    return {
-                      style: {
-                        display: 'block',
-                        backgroundColor: isHighlighted ? 'rgba(6, 182, 212, 0.14)' : 'transparent',
-                        borderLeft: isHighlighted ? '3px solid #06b6d4' : '3px solid transparent',
-                        paddingLeft: '12px',
-                        paddingRight: '16px',
-                      },
-                    };
-                  }}
-                  wrapLines
-                >
-                  {selectedFileContent}
-                </SyntaxHighlighter>
+                <CodeEditor
+                  filePath={selectedFilePath ?? ''}
+                  content={selectedFileContent}
+                  firstLine={fileStartLine}
+                  editable={editingEnabled}
+                  highlightRange={symbolRange}
+                  diagnostics={diagnostics}
+                  onChange={setBuffer}
+                  onSave={handleSave}
+                />
               ) : (
                 <div className="px-3 py-3 text-sm text-text-muted">
                   {selectedIsFile ? (

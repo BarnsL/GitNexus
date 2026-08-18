@@ -191,5 +191,17 @@
     "clear": "Clear trail",
     "beforeFocusing": "Before focusing {{name}}",
     "beforeViewChange": "Before switching to {{mode}} view"
+  },
+  "editor": {
+    "readOnly": "Read-only",
+    "editing": "Editing",
+    "enableEditing": "Enable editing for this repository",
+    "disableEditing": "Disable editing",
+    "unsaved": "Unsaved changes",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveFailed": "Save failed: {{message}}",
+    "writesDisabled": "This server has file writes disabled. Restart it with --allow-file-writes to enable editing."
   }
 }
