@@ -105,7 +105,7 @@ Expected: all tests, typecheck, build, and lint complete without errors.
 
 - [x] **Step 2: Run UI detector**
 
-Run: `node C:\\Users\\Burgboy\\.codex\\skills\\impeccable\\scripts\\detect.mjs --json gitnexus-web/src/components/LoadingOverlay.tsx`
+Run: `node "$HOME/.codex/skills/impeccable/scripts/detect.mjs" --json gitnexus-web/src/components/LoadingOverlay.tsx`
 
 Expected: no unresolved detector finding caused by the change.
 
